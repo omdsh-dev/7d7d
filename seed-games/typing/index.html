@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打字大作战</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #0d0f1a; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>⌨️ 打字大作战</span><span>得分 <b id="score">0</b></span><span>WPM <b id="wpm">0</b></span><span>生命 <b id="lives">3</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">输入屏幕上单词的字母，完整打出即消灭（回车换词）</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 480;
+  const WORDS = ['the', 'code', 'game', 'fast', 'jump', 'ship', 'star', 'moon', 'fire', 'wave', 'dark', 'gold', 'hero', 'power', 'light', 'speed', 'magic', 'cyber', 'pixel', 'rocket', 'storm', 'quest', 'zebra', 'queen'];
+  let words = [], score = 0, lives = 3, over = false, running = false;
+  let typed = '', active = null, spawnTimer = 0;
+  let startTime = 0, typedChars = 0, typedWords = 0;
+
+  function reset() {
+    words = []; score = 0; lives = 3; over = false; typed = ''; active = null;
+    spawnTimer = 0.8; startTime = performance.now(); typedChars = 0; typedWords = 0;
+    document.getElementById('score').textContent = '0';
+    document.getElementById('lives').textContent = '3';
+  }
+
+  function spawn() {
+    const text = WORDS[Math.floor(Math.random() * WORDS.length)];
+    words.push({ text, x: 40 + Math.random() * (W - 120), y: -20, done: false });
+  }
+  function pickActive() {
+    // 优先未开始的词里随机一个作为当前输入目标
+    const alive = words.filter(w => !w.done);
+    if (alive.length === 0) return null;
+    if (active === null || active.done) {
+      active = alive[Math.floor(Math.random() * alive.length)];
+      typed = '';
+    }
+    return active;
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'enter') {
+      e.preventDefault();
+      if (over) reset();
+      running = true;
+      return;
+    }
+    if (!running || over) return;
+    if (e.key === 'Escape') { typed = ''; active = null; return; }
+    if (e.key.length !== 1 || !/[a-zA-Z]/.test(e.key)) return;
+    e.preventDefault();
+    const target = pickActive();
+    if (target === null) return;
+    const ch = e.key.toLowerCase();
+    if (target.text[typed.length] === ch) {
+      typed += ch;
+      typedChars += 1;
+      if (typed === target.text) {
+        target.done = true;
+        typedWords += 1;
+        score += 10 + target.text.length * 2;
+        document.getElementById('score').textContent = String(score);
+        active = null; typed = '';
+        spawnTimer = Math.min(spawnTimer, 0.5);
+      }
+    } else {
+      typedChars += 1; // 错误按键也计入准确率分母
+    }
+  });
+
+  function update(dt) {
+    if (over || !running) return;
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) { spawn(); spawnTimer = Math.max(0.55, 1.3 - score * 0.004); }
+    const speed = 26 + score * 0.05;
+    for (const w of words) {
+      if (w.done) continue;
+      w.y += speed * dt;
+      if (w.y > H - 40) {
+        w.done = true;
+        lives -= 1;
+        document.getElementById('lives').textContent = String(lives);
+        if (lives <= 0) { over = true; running = false; }
+      }
+    }
+    const elapsed = (performance.now() - startTime) / 60000;
+    document.getElementById('wpm').textContent = elapsed > 0 ? String(Math.round(typedWords / elapsed)) : '0';
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // 基地线
+    ctx.strokeStyle = '#ff7f27'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, H - 40); ctx.lineTo(W, H - 40); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,127,39,.08)';
+    ctx.fillRect(0, H - 40, W, 40);
+    for (const w of words) {
+      if (w.done) continue;
+      const isActive = w === active;
+      // 词条
+      ctx.font = 'bold 22px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const width = ctx.measureText(w.text).width;
+      ctx.fillStyle = isActive ? '#2b3050' : '#1a1e34';
+      ctx.fillRect(w.x - 8, w.y - 18, width + 16, 30);
+      ctx.strokeStyle = isActive ? '#ff7f27' : '#2a2d42';
+      ctx.lineWidth = isActive ? 2 : 1;
+      ctx.strokeRect(w.x - 8, w.y - 18, width + 16, 30);
+      // 已打字母高亮
+      const typedLen = isActive ? typed.length : 0;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      if (typedLen > 0) {
+        const typedW = ctx.measureText(w.text.slice(0, typedLen)).width;
+        ctx.fillStyle = '#69f0ae';
+        ctx.fillText(w.text.slice(0, typedLen), w.x, w.y);
+        ctx.fillStyle = '#e8e9f2';
+        ctx.fillText(w.text.slice(typedLen), w.x + typedW, w.y);
+      } else {
+        ctx.fillStyle = '#e8e9f2';
+        ctx.fillText(w.text, w.x, w.y);
+      }
+    }
+    if (!running && !over) {
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('打字大作战', W / 2, H / 2 - 26);
+      ctx.font = '14px sans-serif'; ctx.fillStyle = '#8b90a8';
+      ctx.fillText('空格开始 · 直接输入字母，完整打出单词消灭它', W / 2, H / 2 + 6);
+    }
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('基地失守！', W / 2, H / 2 - 14);
+      ctx.font = '18px sans-serif'; ctx.fillStyle = '#ff7f27';
+      ctx.fillText('得分 ' + score + '，空格再来', W / 2, H / 2 + 24);
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+  reset();
+  document.getElementById('msg').textContent = '输入屏幕上单词的字母，完整打出即消灭（回车换词）';
+})();
+</script>
+</body>
+</html>

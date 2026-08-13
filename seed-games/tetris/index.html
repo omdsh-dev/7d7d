@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>俄罗斯方块</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 420px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #101322; border-radius: 14px; width: min(80vw, 420px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🧩 俄罗斯方块</span><span>得分 <b id="score">0</b></span><span>级 <b id="level">1</b></span></div>
+  <canvas id="cv" width="420" height="600"></canvas>
+  <div id="msg">← → 移动，↑ 旋转，↓ 加速，Space 直落</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const COLS = 10, ROWS = 20, SIZE = 600, CELL = SIZE / ROWS;
+  const W = COLS * CELL;
+  const SHAPES = [
+    [[1, 1, 1, 1]],
+    [[1, 1], [1, 1]],
+    [[0, 1, 0], [1, 1, 1]],
+    [[1, 0, 0], [1, 1, 1]],
+    [[0, 0, 1], [1, 1, 1]],
+    [[1, 1, 0], [0, 1, 1]],
+    [[0, 1, 1], [1, 1, 0]],
+  ];
+  const COLORS = ['#40c4ff', '#ffd740', '#ab47bc', '#ff7f27', '#ff5252', '#69f0ae', '#4fc3f7'];
+  let board = [], piece = null, queue = [], score = 0, level = 1, over = false, running = false;
+  let dropTimer = null;
+
+  function emptyBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(0)) }
+  function randPiece() { return Math.floor(Math.random() * SHAPES.length) }
+  function spawn() {
+    if (queue.length < 2) queue.push(randPiece(), randPiece());
+    const type = queue.shift();
+    const shape = SHAPES[type];
+    piece = { shape, type, x: Math.floor((COLS - shape[0].length) / 2), y: 0 };
+    if (collides(piece)) { over = true; running = false; clearInterval(dropTimer); document.getElementById('msg').textContent = '游戏结束！得分 ' + score + '，Space 重开'; }
+  }
+  function collides(p) {
+    for (let r = 0; r < p.shape.length; r++) for (let c = 0; c < p.shape[r].length; c++) {
+      if (!p.shape[r][c]) continue;
+      const x = p.x + c, y = p.y + r;
+      if (x < 0 || x >= COLS || y >= ROWS) return true;
+      if (y >= 0 && board[y][x]) return true;
+    }
+    return false;
+  }
+  function lock() {
+    for (let r = 0; r < piece.shape.length; r++) for (let c = 0; c < piece.shape[r].length; c++) {
+      if (piece.shape[r][c]) {
+        const y = piece.y + r;
+        if (y < 0) { over = true; clearInterval(dropTimer); document.getElementById('msg').textContent = '游戏结束！得分 ' + score + '，Space 重开'; return; }
+        board[y][piece.x + c] = piece.type + 1;
+      }
+    }
+    let cleared = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (board[r].every(v => v !== 0)) { board.splice(r, 1); board.unshift(Array(COLS).fill(0)); cleared++; r++; }
+    }
+    if (cleared > 0) {
+      score += [0, 100, 300, 500, 800][cleared];
+      document.getElementById('score').textContent = String(score);
+      level = 1 + Math.floor(score / 1000);
+      document.getElementById('level').textContent = String(level);
+      clearInterval(dropTimer);
+      dropTimer = setInterval(drop, Math.max(90, 600 - (level - 1) * 55));
+    }
+    spawn();
+  }
+  function drop() {
+    if (over || !running) return;
+    const moved = { ...piece, y: piece.y + 1 };
+    if (collides(moved)) lock();
+    else piece = moved;
+  }
+  function move(dx) {
+    if (over || !running) return;
+    const moved = { ...piece, x: piece.x + dx };
+    if (!collides(moved)) piece = moved;
+  }
+  function rotate() {
+    if (over || !running) return;
+    const shape = piece.shape[0].map((_, i) => piece.shape.map(row => row[i]).reverse());
+    const moved = { ...piece, shape };
+    let x = piece.x;
+    if (!collides({ ...moved, x })) piece = { ...moved, x };
+    else if (!collides({ ...moved, x: x - 1 })) piece = { ...moved, x: x - 1 };
+    else if (!collides({ ...moved, x: x + 1 })) piece = { ...moved, x: x + 1 };
+  }
+  function hardDrop() {
+    if (over || !running) return;
+    while (!collides({ ...piece, y: piece.y + 1 })) piece.y++;
+    lock();
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') {
+      e.preventDefault();
+      if (over) { board = emptyBoard(); score = 0; level = 1; document.getElementById('score').textContent = '0'; document.getElementById('level').textContent = '1'; spawn(); running = true; clearInterval(dropTimer); dropTimer = setInterval(drop, 600); return; }
+      if (!running) { running = true; clearInterval(dropTimer); dropTimer = setInterval(drop, 600); }
+      else hardDrop();
+      return;
+    }
+    if (k === 'arrowleft' || k === 'a') { move(-1); e.preventDefault(); }
+    if (k === 'arrowright' || k === 'd') { move(1); e.preventDefault(); }
+    if (k === 'arrowdown' || k === 's') { drop(); e.preventDefault(); }
+    if (k === 'arrowup' || k === 'w') { rotate(); e.preventDefault(); }
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    const ox = (SIZE - W) / 2;
+    ctx.fillStyle = '#161a2e';
+    ctx.fillRect(ox, 0, W, SIZE);
+    ctx.strokeStyle = '#1d2138'; ctx.lineWidth = 1;
+    for (let c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(ox + c * CELL, 0); ctx.lineTo(ox + c * CELL, SIZE); ctx.stroke(); }
+    for (let r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(ox, r * CELL); ctx.lineTo(ox + W, r * CELL); ctx.stroke(); }
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (!board[r][c]) continue;
+      ctx.fillStyle = COLORS[board[r][c] - 1] ?? '#888';
+      ctx.fillRect(ox + c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
+    }
+    if (piece && !over) {
+      for (let r = 0; r < piece.shape.length; r++) for (let c = 0; c < piece.shape[r].length; c++) {
+        if (!piece.shape[r][c]) continue;
+        const y = piece.y + r;
+        if (y < 0) continue;
+        ctx.fillStyle = COLORS[piece.type];
+        ctx.fillRect(ox + (piece.x + c) * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+      }
+    }
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('游戏结束', SIZE / 2, SIZE / 2 - 10);
+      ctx.fillStyle = '#ff7f27'; ctx.font = '18px sans-serif';
+      ctx.fillText('得分 ' + score + '，Space 重开', SIZE / 2, SIZE / 2 + 28);
+    }
+    requestAnimationFrame(draw);
+  }
+
+  board = emptyBoard(); spawn(); draw();
+  document.getElementById('msg').textContent = '← → 移动，↑ 旋转，↓ 加速，Space 直落/开始';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2048</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #0f1120; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); touch-action: none; }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🔢 2048</span><span>得分 <b id="score">0</b></span><span>最高 <b id="best">0</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">方向键 / WASD 移动，Space 重开（触屏可滑动）</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const N = 4, SIZE = 480, PAD = 14, GAP = 10;
+  const CELL = (SIZE - PAD * 2 - GAP * (N - 1)) / N;
+  let grid = [], score = 0, over = false, won = false, best = 0;
+  try { best = Number(localStorage.getItem('7d7d-2048-best') ?? '0') || 0 } catch { }
+  document.getElementById('best').textContent = String(best);
+
+  const COLORS = {
+    2: '#3a3f5c', 4: '#464d73', 8: '#5a5296', 16: '#6f5ab0',
+    32: '#8a4fb8', 64: '#b04f9e', 128: '#c94f6d', 256: '#e05545',
+    512: '#e07a2e', 1024: '#e0a82e', 2048: '#ffd740', 4096: '#69f0ae',
+  };
+
+  function emptyGrid() { return Array.from({ length: N }, () => Array(N).fill(0)) }
+  function reset() { grid = emptyGrid(); score = 0; over = false; won = false; spawn(); spawn(); updateScore() }
+  function spawn() {
+    const free = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (grid[r][c] === 0) free.push([r, c]);
+    if (free.length === 0) return;
+    const [r, c] = free[Math.floor(Math.random() * free.length)];
+    grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+  }
+  function updateScore() {
+    document.getElementById('score').textContent = String(score);
+    if (score > best) { best = score; try { localStorage.setItem('7d7d-2048-best', String(best)) } catch { } document.getElementById('best').textContent = String(best); }
+  }
+  function lineMove(line) {
+    const vals = line.filter(v => v !== 0);
+    const out = []; let gained = 0;
+    for (let i = 0; i < vals.length; i++) {
+      if (i + 1 < vals.length && vals[i] === vals[i + 1]) { out.push(vals[i] * 2); gained += vals[i] * 2; i++; }
+      else out.push(vals[i]);
+    }
+    while (out.length < N) out.push(0);
+    return { out, gained };
+  }
+  function slide(dr, dc) {
+    let moved = false; let gained = 0;
+    for (let i = 0; i < N; i++) {
+      const line = [];
+      for (let k = 0; k < N; k++) {
+        const r = dr === 1 ? N - 1 - k : k;
+        const c = dc === 1 ? N - 1 - k : k;
+        line.push(grid[r][c]);
+      }
+      const res = lineMove(line);
+      if (res.out.some((v, k) => v !== line[k])) moved = true;
+      gained += res.gained;
+      for (let k = 0; k < N; k++) {
+        const r = dr === 1 ? N - 1 - k : k;
+        const c = dc === 1 ? N - 1 - k : k;
+        grid[r][c] = res.out[k];
+      }
+    }
+    return { moved, gained };
+  }
+  function canMove() {
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (grid[r][c] === 0) return true;
+      if (c + 1 < N && grid[r][c] === grid[r][c + 1]) return true;
+      if (r + 1 < N && grid[r][c] === grid[r + 1][c]) return true;
+    }
+    return false;
+  }
+  function hasWin() { return grid.some(row => row.some(v => v >= 2048)) }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') { e.preventDefault(); if (over || won) reset(); return; }
+    const dir = k === 'arrowup' || k === 'w' ? [-1, 0] : k === 'arrowdown' || k === 's' ? [1, 0]
+      : k === 'arrowleft' || k === 'a' ? [0, -1] : k === 'arrowright' || k === 'd' ? [0, 1] : null;
+    if (dir === null) return;
+    e.preventDefault();
+    if (over || won) return;
+    const { moved, gained } = slide(dir[0], dir[1]);
+    if (!moved) return;
+    score += gained; updateScore();
+    spawn();
+    if (hasWin() && !won) { won = true; document.getElementById('msg').textContent = '达成 2048！继续冲更高分'; }
+    if (!canMove()) { over = true; document.getElementById('msg').textContent = '无路可走！得分 ' + score + '，Space 重开'; }
+  });
+
+  // 触屏滑动
+  let sx = 0, sy = 0;
+  cv.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY }, { passive: true });
+  cv.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+    const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? [0, 1] : [0, -1]) : (dy > 0 ? [1, 0] : [-1, 0]);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: dir[0] === 1 ? 'ArrowDown' : dir[0] === -1 ? 'ArrowUp' : dir[1] === 1 ? 'ArrowRight' : 'ArrowLeft' }));
+  }, { passive: true });
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const x = PAD + c * (CELL + GAP), y = PAD + r * (CELL + GAP);
+      const v = grid[r][c];
+      ctx.fillStyle = COLORS[v] ?? '#2a2e4a';
+      roundRect(x, y, CELL, CELL, 10);
+      ctx.fill();
+      if (v !== 0) {
+        ctx.fillStyle = v >= 128 ? '#fff' : '#e8e9f2';
+        ctx.font = `bold ${v >= 1024 ? 34 : v >= 128 ? 40 : 46}px sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String(v), x + CELL / 2, y + CELL / 2 + 2);
+      }
+    }
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('游戏结束', SIZE / 2, SIZE / 2 - 10);
+      ctx.fillStyle = '#ff7f27'; ctx.font = '18px sans-serif';
+      ctx.fillText('得分 ' + score + '，Space 重开', SIZE / 2, SIZE / 2 + 28);
+    }
+    requestAnimationFrame(draw);
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  reset(); draw();
+  document.getElementById('msg').textContent = '方向键 / WASD 移动，Space 重开（触屏可滑动）';
+})();
+</script>
+</body>
+</html>

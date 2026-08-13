@@ -1,0 +1,10 @@
+{
+  "title": "2048",
+  "description": "经典数字拼图：方向键合并数字，合成 2048！",
+  "category": "益智",
+  "tags": ["数字", "拼图", "键盘"],
+  "author": "7d7d",
+  "type": "html5",
+  "emoji": "🔢",
+  "createdAt": 1755100000000
+}

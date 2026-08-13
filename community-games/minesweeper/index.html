@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>扫雷</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #101322; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); cursor: pointer; }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>💣 扫雷</span><span>剩余雷 <b id="mines">10</b></span><span>用时 <b id="time">0</b>s</span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">左键翻开，右键标记雷</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const N = 9, SIZE = 480, CELL = SIZE / N, MINES = 10;
+  const NUM_COLORS = ['', '#40c4ff', '#69f0ae', '#ff5252', '#ab47bc', '#ffd740', '#ff7f27', '#fff', '#8b90a8'];
+  let board = [], revealed = 0, flagCount = 0, over = false, won = false, started = false;
+  let timer = 0, timerId = null, firstClick = true;
+
+  function reset() {
+    board = Array.from({ length: N }, () => Array.from({ length: N }, () => ({ mine: false, open: false, flag: false, num: 0 })));
+    revealed = 0; flagCount = 0; over = false; won = false; started = false; firstClick = true;
+    timer = 0; clearInterval(timerId); timerId = null;
+    document.getElementById('mines').textContent = '10';
+    document.getElementById('time').textContent = '0';
+    document.getElementById('msg').textContent = '左键翻开，右键标记雷';
+  }
+
+  function plantMines(safeR, safeC) {
+    let placed = 0;
+    while (placed < MINES) {
+      const r = Math.floor(Math.random() * N), c = Math.floor(Math.random() * N);
+      if (board[r][c].mine || (r === safeR && c === safeC)) continue;
+      board[r][c].mine = true; placed++;
+    }
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (board[r][c].mine) continue;
+      let n = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < N && nc >= 0 && nc < N && board[nr][nc].mine) n++;
+      }
+      board[r][c].num = n;
+    }
+  }
+
+  function flood(r, c) {
+    const cell = board[r][c];
+    if (cell.open || cell.flag) return;
+    cell.open = true; revealed++;
+    if (cell.num === 0) {
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < N && nc >= 0 && nc < N) flood(nr, nc);
+      }
+    }
+  }
+  function checkWin() {
+    if (revealed === N * N - MINES) {
+      won = true; over = true;
+      clearInterval(timerId);
+      document.getElementById('msg').textContent = '全部排清！用时 ' + timer + 's，点击重开';
+      return true;
+    }
+    return false;
+  }
+
+  cv.addEventListener('click', (e) => {
+    if (over) { reset(); return; }
+    const r = cv.getBoundingClientRect();
+    const c = Math.floor((e.clientX - r.left) * (SIZE / r.width) / CELL);
+    const rr = Math.floor((e.clientY - r.top) * (SIZE / r.height) / CELL);
+    if (c < 0 || c >= N || rr < 0 || rr >= N) return;
+    if (!started) {
+      started = true;
+      plantMines(rr, c);
+      timerId = setInterval(() => { timer++; document.getElementById('time').textContent = String(timer); }, 1000);
+    }
+    const cell = board[rr][c];
+    if (cell.flag || cell.open) return;
+    if (cell.mine) {
+      over = true; clearInterval(timerId);
+      document.getElementById('msg').textContent = '踩雷了！点击重开';
+      revealAll();
+      return;
+    }
+    flood(rr, c);
+    checkWin();
+  });
+
+  cv.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (over) { reset(); return; }
+    const r = cv.getBoundingClientRect();
+    const c = Math.floor((e.clientX - r.left) * (SIZE / r.width) / CELL);
+    const rr = Math.floor((e.clientY - r.top) * (SIZE / r.height) / CELL);
+    if (c < 0 || c >= N || rr < 0 || rr >= N) return;
+    const cell = board[rr][c];
+    if (cell.open) return;
+    cell.flag = !cell.flag;
+    flagCount += cell.flag ? 1 : -1;
+    document.getElementById('mines').textContent = String(Math.max(0, MINES - flagCount));
+    checkWin();
+  });
+
+  function revealAll() {
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (board[r][c].mine) board[r][c].open = true;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const cell = board[r][c];
+      const x = c * CELL, y = r * CELL;
+      if (cell.open) {
+        ctx.fillStyle = '#161a2e';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.strokeStyle = '#1d2138'; ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, CELL, CELL);
+        if (cell.mine) {
+          ctx.fillStyle = '#ff5252';
+          ctx.beginPath(); ctx.arc(x + CELL / 2, y + CELL / 2, CELL * 0.28, 0, Math.PI * 2); ctx.fill();
+        } else if (cell.num > 0) {
+          ctx.fillStyle = NUM_COLORS[cell.num];
+          ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(String(cell.num), x + CELL / 2, y + CELL / 2 + 1);
+        }
+      } else {
+        ctx.fillStyle = '#262a40';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = '#2e3450';
+        ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+        ctx.strokeStyle = '#1d2138'; ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, CELL, CELL);
+        if (cell.flag) {
+          ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('🚩', x + CELL / 2, y + CELL / 2 + 1);
+        }
+      }
+    }
+    if (won) {
+      ctx.fillStyle = 'rgba(105,240,174,.14)'; ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#69f0ae'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('🎉 排雷成功', SIZE / 2, SIZE / 2);
+    }
+    requestAnimationFrame(draw);
+  }
+  reset(); draw();
+})();
+</script>
+</body>
+</html>

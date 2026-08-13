@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打地鼠</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #2e7d32; border-radius: 14px; cursor: pointer; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🔨 打地鼠</span><span>得分 <b id="score">0</b></span><span>剩余 <b id="time">30</b>s</span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">点击冒头的地鼠！</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const N = 3, SIZE = 480, CELL = SIZE / N;
+  const moles = Array.from({ length: N * N }, () => ({ up: false, t: 0, dur: 0 }));
+  let score = 0, timeLeft = 30, running = false, over = false, timer = null, spawner = null;
+
+  function cellAt(e) {
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (SIZE / r.width);
+    const y = (e.clientY - r.top) * (SIZE / r.height);
+    return { c: Math.min(N - 1, Math.floor(x / CELL)), r: Math.min(N - 1, Math.floor(y / CELL)) };
+  }
+
+  function start() {
+    score = 0; timeLeft = 30; over = false;
+    moles.forEach(m => { m.up = false; });
+    document.getElementById('score').textContent = '0';
+    clearInterval(timer); clearInterval(spawner);
+    timer = setInterval(() => {
+      timeLeft -= 1;
+      document.getElementById('time').textContent = String(timeLeft);
+      if (timeLeft <= 0) { end(); }
+    }, 1000);
+    spawner = setInterval(spawn, 850);
+    spawn();
+  }
+
+  function spawn() {
+    if (over) return;
+    const down = moles.filter(m => !m.up);
+    if (down.length === 0) return;
+    const m = down[Math.floor(Math.random() * down.length)];
+    m.up = true; m.t = performance.now(); m.dur = 650 + Math.random() * 450;
+  }
+
+  function end() {
+    clearInterval(timer); clearInterval(spawner);
+    over = true; running = false;
+    document.getElementById('msg').textContent = '时间到！得分 ' + score + '，点击重玩';
+  }
+
+  cv.addEventListener('click', (e) => {
+    if (over) { start(); return; }
+    if (!running) { running = true; start(); return; }
+    const { c, r } = cellAt(e);
+    const m = moles[r * N + c];
+    if (m.up) {
+      m.up = false;
+      score += 1;
+      document.getElementById('score').textContent = String(score);
+      document.getElementById('msg').textContent = '敲中了！+1';
+    } else {
+      document.getElementById('msg').textContent = '没敲到…';
+    }
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    const now = performance.now();
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const x = c * CELL, y = r * CELL;
+        ctx.fillStyle = '#4caf50';
+        ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL - 14, CELL * 0.42, CELL * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3b3b3b';
+        ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL - 8, CELL * 0.34, CELL * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+        const m = moles[r * N + c];
+        if (m.up && !over) {
+          if (now - m.t > m.dur) { m.up = false; continue; }
+          const h = CELL * 0.5;
+          ctx.fillStyle = '#8d6e63';
+          ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL - 20, CELL * 0.26, h, 0, Math.PI, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#6d4c41';
+          ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL - 20 - h * 0.75, CELL * 0.24, h * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.arc(x + CELL / 2 - 7, y + CELL - 34, 4, 0, Math.PI * 2); ctx.arc(x + CELL / 2 + 7, y + CELL - 34, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#212121';
+          ctx.beginPath(); ctx.arc(x + CELL / 2 - 7, y + CELL - 34, 1.8, 0, Math.PI * 2); ctx.arc(x + CELL / 2 + 7, y + CELL - 34, 1.8, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#5d4037';
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(x + CELL / 2, y + CELL - 24, 8, 0.2, Math.PI - 0.2); ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+  document.getElementById('msg').textContent = '点击开始';
+})();
+</script>
+</body>
+</html>

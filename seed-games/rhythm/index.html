@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>节奏打击</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #0d0f1a; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🎵 节奏打击</span><span>得分 <b id="score">0</b></span><span>连击 <b id="combo">0</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">音符落到线上时按 D F J K（对应 1 2 3 4 轨）</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 480, LANES = 4;
+  const LANE_W = W / LANES, HIT_Y = H - 70, NOTE_R = 16;
+  const KEYS = ['d', 'f', 'j', 'k'];
+  let notes = [], score = 0, combo = 0, bestCombo = 0, over = false, running = false;
+  let spawnTimer = 0, speed = 180, audio = null;
+
+  // ---------- WebAudio：打击音 + 节拍器 ----------
+  function initAudio() {
+    if (audio !== null) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audio = { ctx: new AC(), kickTimer: null, hatTimer: null, beat: 0 };
+    scheduleMetronome();
+  }
+  function playTone(freq, dur, type = 'sine', vol = 0.16) {
+    if (!audio) return;
+    const t = audio.ctx.currentTime;
+    const osc = audio.ctx.createOscillator();
+    const gain = audio.ctx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(gain).connect(audio.ctx.destination);
+    osc.start(t); osc.stop(t + dur);
+  }
+  function playHit(lane) {
+    const base = [261.6, 329.6, 392, 523.3][lane];
+    playTone(base * (1 + Math.min(combo, 20) * 0.01), 0.12, 'triangle', 0.18);
+  }
+  function playMiss() { playTone(110, 0.18, 'sawtooth', 0.1) }
+  function scheduleMetronome() {
+    if (!audio) return;
+    // 120 BPM 节拍器：每拍 kick，反拍 hat
+    const interval = 0.5;
+    const loop = () => {
+      if (!audio || over) return;
+      const now = audio.ctx.currentTime;
+      while (audio._nextBeatTime === undefined || audio._nextBeatTime < now + 0.3) {
+        if (audio._nextBeatTime === undefined) audio._nextBeatTime = now + 0.1;
+        const t = audio._nextBeatTime;
+        const kick = audio.ctx.createOscillator();
+        const kg = audio.ctx.createGain();
+        kick.type = 'sine'; kick.frequency.setValueAtTime(150, t);
+        kick.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+        kg.gain.setValueAtTime(0.22, t);
+        kg.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+        kick.connect(kg).connect(audio.ctx.destination);
+        kick.start(t); kick.stop(t + 0.15);
+        if (audio.beat % 2 === 1) {
+          const hat = audio.ctx.createOscillator();
+          const hg = audio.ctx.createGain();
+          hat.type = 'square'; hat.frequency.value = 6000;
+          hg.gain.setValueAtTime(0.05, t);
+          hg.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+          hat.connect(hg).connect(audio.ctx.destination);
+          hat.start(t); hat.stop(t + 0.05);
+        }
+        audio.beat++;
+        audio._nextBeatTime = t + interval;
+      }
+      audio.kickTimer = setTimeout(loop, 40);
+    };
+    loop();
+  }
+
+  function reset() {
+    notes = []; score = 0; combo = 0; bestCombo = 0; over = false;
+    spawnTimer = 1; speed = 180;
+    document.getElementById('score').textContent = '0';
+    document.getElementById('combo').textContent = '0';
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') {
+      e.preventDefault();
+      if (over) reset();
+      initAudio(); running = true;
+      return;
+    }
+    if (!running || over) return;
+    const lane = KEYS.indexOf(k);
+    if (lane === -1) return;
+    e.preventDefault();
+    // 打击判定：找该轨最接近判定线的音符
+    let best = null, bestDist = Infinity;
+    for (const n of notes) {
+      if (n.lane !== lane || n.hit) continue;
+      const dist = Math.abs(n.y - HIT_Y);
+      if (dist < bestDist) { bestDist = dist; best = n; }
+    }
+    if (best === null || bestDist > 46) {
+      combo = 0;
+      document.getElementById('combo').textContent = '0';
+      playMiss();
+      return;
+    }
+    best.hit = true;
+    combo += 1;
+    bestCombo = Math.max(bestCombo, combo);
+    const timing = bestDist < 14 ? 300 : bestDist < 30 ? 200 : 100;
+    score += timing + combo * 5;
+    document.getElementById('score').textContent = String(score);
+    document.getElementById('combo').textContent = String(combo);
+    playHit(lane);
+  });
+
+  function spawn() {
+    const lane = Math.floor(Math.random() * LANES);
+    notes.push({ lane, y: -30, hit: false });
+  }
+
+  function update(dt) {
+    if (over || !running) return;
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawn();
+      spawnTimer = Math.max(0.42, 0.9 - score * 0.0004);
+      speed = Math.min(340, 180 + score * 0.02);
+    }
+    for (const n of notes) n.y += speed * dt;
+    // 漏掉判定线
+    for (const n of notes) {
+      if (!n.hit && n.y > HIT_Y + 30) {
+        n.hit = true;
+        combo = 0;
+        document.getElementById('combo').textContent = '0';
+        playMiss();
+      }
+    }
+    notes = notes.filter(n => n.y < H + 40);
+    if (score >= 0 && notes.length > 80) { /* 防御：不清理，节点可控 */ }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    ctx.clearRect(0, 0, W, H);
+    // 轨道
+    for (let i = 0; i < LANES; i++) {
+      ctx.fillStyle = i % 2 === 0 ? '#11142a' : '#141830';
+      ctx.fillRect(i * LANE_W, 0, LANE_W, H);
+      ctx.fillStyle = '#2a2d42';
+      ctx.fillRect(i * LANE_W, 0, 1, H);
+    }
+    // 判定线
+    ctx.strokeStyle = '#ff7f27'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, HIT_Y); ctx.lineTo(W, HIT_Y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,127,39,.12)';
+    ctx.fillRect(0, HIT_Y - 18, W, 36);
+    // 键位提示
+    ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+    for (let i = 0; i < LANES; i++) {
+      ctx.fillStyle = '#4a4f72';
+      ctx.fillText(KEYS[i].toUpperCase(), i * LANE_W + LANE_W / 2, HIT_Y + 32);
+    }
+    // 音符
+    for (const n of notes) {
+      if (n.hit) continue;
+      ctx.fillStyle = ['#40c4ff', '#ffd740', '#69f0ae', '#ab47bc'][n.lane];
+      ctx.beginPath();
+      ctx.arc(n.lane * LANE_W + LANE_W / 2, n.y, NOTE_R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0d0f1a';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(String(n.lane + 1), n.lane * LANE_W + LANE_W / 2, n.y + 5);
+    }
+    if (!running && !over) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('空格开始', W / 2, H / 2 - 10);
+      ctx.font = '14px sans-serif'; ctx.fillStyle = '#8b90a8';
+      ctx.fillText('D F J K = 1 2 3 4 轨，连击加分', W / 2, H / 2 + 24);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  document.getElementById('msg').textContent = '音符落到线上时按 D F J K（对应 1 2 3 4 轨）';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>记忆翻牌</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #101322; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); cursor: pointer; }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🃏 记忆翻牌</span><span>步数 <b id="moves">0</b></span><span>配对 <b id="pairs">0</b>/8</span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">点击卡片翻开，两两配对</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const SIZE = 480, PAD = 18, GAP = 14, COLS = 4, ROWS = 4;
+  const CELL = (SIZE - PAD * 2 - GAP * (COLS - 1)) / COLS;
+  const EMOJIS = ['🚀', '🐍', '🍎', '🎮', '🌈', '🐬', '🍉', '⭐'];
+  let cards = [], flipped = [], moves = 0, matched = 0, lock = false, won = false;
+
+  function reset() {
+    const deck = [...EMOJIS, ...EMOJIS];
+    for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+    cards = deck.map((emoji, index) => ({ emoji, index, faceUp: false, done: false }));
+    flipped = []; moves = 0; matched = 0; lock = false; won = false;
+    document.getElementById('moves').textContent = '0';
+    document.getElementById('pairs').textContent = '0/8';
+    document.getElementById('msg').textContent = '点击卡片翻开，两两配对';
+  }
+
+  function cardAt(e) {
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (SIZE / r.width), y = (e.clientY - r.top) * (SIZE / r.height);
+    const c = Math.floor((x - PAD) / (CELL + GAP)), rr = Math.floor((y - PAD) / (CELL + GAP));
+    if (c < 0 || c >= COLS || rr < 0 || rr >= ROWS) return null;
+    const index = rr * COLS + c;
+    return cards[index];
+  }
+
+  function flipDelay() {
+    setTimeout(() => {
+      for (const card of flipped) card.faceUp = false;
+      flipped = [];
+      lock = false;
+      draw();
+    }, 650);
+  }
+
+  cv.addEventListener('click', (e) => {
+    if (lock || won) { if (won) reset(); return; }
+    const card = cardAt(e);
+    if (card === null || card.done || card.faceUp) return;
+    card.faceUp = true;
+    flipped.push(card);
+    if (flipped.length === 2) {
+      moves += 1;
+      document.getElementById('moves').textContent = String(moves);
+      const [a, b] = flipped;
+      if (a.emoji === b.emoji) {
+        a.done = true; b.done = true; flipped = [];
+        matched += 1;
+        document.getElementById('pairs').textContent = matched + '/8';
+        if (matched === 8) {
+          won = true;
+          document.getElementById('msg').textContent = '全部配对！用了 ' + moves + ' 步，点击重开';
+        }
+      } else {
+        lock = true;
+        flipDelay();
+      }
+    }
+    draw();
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      const c = i % COLS, rr = Math.floor(i / COLS);
+      const x = PAD + c * (CELL + GAP), y = PAD + rr * (CELL + GAP);
+      if (card.done) {
+        ctx.fillStyle = '#2b5d4a';
+        roundRect(x, y, CELL, CELL, 10); ctx.fill();
+        ctx.fillStyle = '#69f0ae';
+        ctx.font = '30px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('✓', x + CELL / 2, y + CELL / 2 + 1);
+        continue;
+      }
+      if (card.faceUp) {
+        ctx.fillStyle = '#3a3f5c';
+        roundRect(x, y, CELL, CELL, 10); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '44px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(card.emoji, x + CELL / 2, y + CELL / 2 + 2);
+      } else {
+        ctx.fillStyle = '#262a40';
+        roundRect(x, y, CELL, CELL, 10); ctx.fill();
+        ctx.fillStyle = '#4a4f72';
+        ctx.font = '34px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('❓', x + CELL / 2, y + CELL / 2 + 1);
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  reset(); draw();
+})();
+</script>
+</body>
+</html>

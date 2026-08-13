@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>推箱子</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #101322; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>📦 推箱子</span><span>第 <b id="level">1</b>/5 关</span><span>步数 <b id="steps">0</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">方向键 / WASD 移动，R 重开本关</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const SIZE = 480, CELL = 48;
+  // #=墙 .=空地 x=目标点 o=箱子 *=箱子在目标点 @=玩家 +=玩家在目标点
+  const LEVELS = [
+    [
+      '##########',
+      '#        #',
+      '#  o x   #',
+      '#  @     #',
+      '#        #',
+      '#        #',
+      '#        #',
+      '#        #',
+      '#        #',
+      '##########',
+    ],
+    [
+      '##########',
+      '#        #',
+      '#  xx    #',
+      '#  oo    #',
+      '#   @    #',
+      '#        #',
+      '#        #',
+      '#        #',
+      '#        #',
+      '##########',
+    ],
+    [
+      '##########',
+      '#        #',
+      '#  x  x  #',
+      '#        #',
+      '#  o     #',
+      '#     o  #',
+      '#    @   #',
+      '#        #',
+      '#        #',
+      '##########',
+    ],
+    [
+      '##########',
+      '#        #',
+      '# x    x #',
+      '#        #',
+      '#   o    #',
+      '#     o  #',
+      '#    @   #',
+      '#        #',
+      '#        #',
+      '##########',
+    ],
+    [
+      '##########',
+      '#        #',
+      '#        #',
+      '#  o  o  #',
+      '#  x  x  #',
+      '#   @    #',
+      '#        #',
+      '#        #',
+      '#        #',
+      '##########',
+    ],
+  ];
+  let level = 0, walls = [], goals = [], boxes = [], player = null, steps = 0, won = false;
+
+  function loadLevel() {
+    const map = LEVELS[level];
+    walls = []; goals = []; boxes = [];
+    steps = 0; won = false;
+    for (let r = 0; r < map.length; r++) for (let c = 0; c < map[r].length; c++) {
+      const ch = map[r][c];
+      if (ch === '#') walls.push([c, r]);
+      if (ch === 'x' || ch === '*') goals.push([c, r]);
+      if (ch === 'o' || ch === '*') boxes.push({ x: c, y: r });
+      if (ch === '@' || ch === '+') player = { x: c, y: r };
+      if (ch === '+') goals.push([c, r]);
+    }
+    document.getElementById('level').textContent = (level + 1) + '/' + LEVELS.length;
+    document.getElementById('steps').textContent = '0';
+    document.getElementById('msg').textContent = '方向键 / WASD 移动，R 重开本关';
+  }
+  function boxAt(x, y) { return boxes.find(b => b.x === x && b.y === y) }
+  function isWall(x, y) { return walls.some(w => w[0] === x && w[1] === y) }
+
+  function move(dx, dy) {
+    if (won) return;
+    const nx = player.x + dx, ny = player.y + dy;
+    if (isWall(nx, ny)) return;
+    const box = boxAt(nx, ny);
+    if (box) {
+      const bx = nx + dx, by = ny + dy;
+      if (isWall(bx, by) || boxAt(bx, by)) return;
+      box.x = bx; box.y = by;
+    }
+    player.x = nx; player.y = ny;
+    steps++;
+    document.getElementById('steps').textContent = String(steps);
+    if (boxes.every(b => goals.some(g => g[0] === b.x && g[1] === b.y))) {
+      won = true;
+      if (level < LEVELS.length - 1) {
+        document.getElementById('msg').textContent = '过关！按 空格 进入下一关';
+      } else {
+        document.getElementById('msg').textContent = '全部通关！恭喜！R 从第一关重来';
+      }
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'r') { loadLevel(); return; }
+    if (k === ' ') {
+      e.preventDefault();
+      if (won && level < LEVELS.length - 1) { level++; loadLevel(); }
+      return;
+    }
+    const d = k === 'arrowup' || k === 'w' ? [0, -1] : k === 'arrowdown' || k === 's' ? [0, 1]
+      : k === 'arrowleft' || k === 'a' ? [-1, 0] : k === 'arrowright' || k === 'd' ? [1, 0] : null;
+    if (d === null) return;
+    e.preventDefault();
+    move(d[0], d[1]);
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    const ox = (SIZE - 10 * CELL) / 2;
+    // 地面
+    ctx.fillStyle = '#1a1e34';
+    ctx.fillRect(ox, 0, 10 * CELL, 10 * CELL);
+    for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+      if ((r + c) % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,.02)'; ctx.fillRect(ox + c * CELL, r * CELL, CELL, CELL); }
+    }
+    // 目标点
+    for (const [gx, gy] of goals) {
+      ctx.strokeStyle = '#ffd740'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ox + gx * CELL + CELL / 2, gy * CELL + CELL / 2, CELL * 0.22, 0, Math.PI * 2); ctx.stroke();
+    }
+    // 墙
+    ctx.fillStyle = '#3a3f5c';
+    for (const [wx, wy] of walls) ctx.fillRect(ox + wx * CELL, wy * CELL, CELL, CELL);
+    ctx.fillStyle = '#4a4f72';
+    for (const [wx, wy] of walls) ctx.fillRect(ox + wx * CELL + 4, wy * CELL + 4, CELL - 8, CELL - 8);
+    // 箱子
+    for (const b of boxes) {
+      const onGoal = goals.some(g => g[0] === b.x && g[1] === b.y);
+      ctx.fillStyle = onGoal ? '#69f0ae' : '#8d6e63';
+      ctx.fillRect(ox + b.x * CELL + 6, b.y * CELL + 6, CELL - 12, CELL - 12);
+      ctx.fillStyle = onGoal ? '#b9f6ca' : '#a1887f';
+      ctx.fillRect(ox + b.x * CELL + 9, b.y * CELL + 9, CELL - 18, 6);
+    }
+    // 玩家
+    if (player) {
+      ctx.fillStyle = '#ff7f27';
+      ctx.beginPath();
+      ctx.arc(ox + player.x * CELL + CELL / 2, player.y * CELL + CELL / 2, CELL * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(ox + player.x * CELL + CELL / 2 - 4, player.y * CELL + CELL / 2 - 5, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ox + player.x * CELL + CELL / 2 + 4, player.y * CELL + CELL / 2 - 5, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  loadLevel(); draw();
+})();
+</script>
+</body>
+</html>

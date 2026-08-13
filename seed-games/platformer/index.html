@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>像素跳跃</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #7ec8e3; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🏃 像素跳跃</span><span>金币 <b id="coins">0</b>/5</span><span>R 重开</span></div>
+  <canvas id="cv" width="480" height="320"></canvas>
+  <div id="msg">← → 移动，空格 / ↑ 跳跃，吃到所有金币并抵达 🚩</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 320, TILE = 32;
+  // #=实心砖 =平台 o=金币 ^=尖刺 S=起点 F=终点
+  const LEVELS = [
+    [
+      '##############################',
+      '#o   o       o        o     F#',
+      '#    #    =====    =====     #',
+      '#        #           #   ^   #',
+      '#   ===  #    o      #       #',
+      '#S        =====   =====      #',
+      '##############################',
+    ],
+  ];
+  const GRAV = 900, MOVE = 200, JUMP = 330;
+  let tiles = [], coins = [], player, camX = 0, coinsGot = 0, over = false, won = false;
+  let keys = {};
+
+  function loadLevel() {
+    const map = LEVELS[0];
+    tiles = []; coins = [];
+    coinsGot = 0; over = false; won = false;
+    for (let r = 0; r < map.length; r++) for (let c = 0; c < map[r].length; c++) {
+      const ch = map[r][c];
+      if (ch === '#' || ch === '=') tiles.push({ x: c * TILE, y: r * TILE, solid: ch === '#', plat: ch === '=' });
+      if (ch === 'o') coins.push({ x: c * TILE + TILE / 2, y: r * TILE + TILE / 2, got: false });
+      if (ch === 'S') player = { x: c * TILE + 8, y: r * TILE - 24, w: 16, h: 24, vx: 0, vy: 0, onGround: false };
+      if (ch === 'F') player.flag = { x: c * TILE, y: r * TILE };
+      if (ch === '^') tiles.push({ x: c * TILE, y: r * TILE, spike: true, w: TILE, h: TILE });
+    }
+    document.getElementById('coins').textContent = '0/5';
+  }
+
+  function collide(px, py, pw, ph) {
+    for (const t of tiles) {
+      if (px < t.x + (t.w ?? TILE) && px + pw > t.x && py < t.y + (t.h ?? TILE) && py + ph > t.y) return t;
+    }
+    return null;
+  }
+
+  function update(dt) {
+    if (over || won) return;
+    let dx = 0;
+    if (keys.left || keys.a) dx -= 1;
+    if (keys.right || keys.d) dx += 1;
+    player.vx = dx * MOVE;
+    player.vy += GRAV * dt;
+
+    // X 轴
+    player.x += player.vx * dt;
+    let t = collide(player.x, player.y, player.w, player.h);
+    if (t && !t.plat) { player.x += player.vx > 0 ? -(player.x + player.w - t.x) : (t.x + TILE - player.x); player.vx = 0; }
+    // Y 轴
+    player.y += player.vy * dt;
+    player.onGround = false;
+    t = collide(player.x, player.y, player.w, player.h);
+    if (t) {
+      if (t.plat) {
+        // 单面平台：只从上方落
+        if (player.vy > 0 && player.y + player.h - player.vy * dt <= t.y + 2) {
+          player.y = t.y - player.h; player.vy = 0; player.onGround = true;
+        }
+      } else if (t.spike) {
+        die(); return;
+      } else {
+        if (player.vy > 0) { player.y = t.y - player.h; player.vy = 0; player.onGround = true; }
+        else { player.y = t.y + TILE; player.vy = 0; }
+      }
+    }
+    // 金币
+    for (const c of coins) {
+      if (c.got) continue;
+      if (Math.abs(player.x + 8 - c.x) < 20 && Math.abs(player.y + 12 - c.y) < 22) {
+        c.got = true; coinsGot += 1;
+        document.getElementById('coins').textContent = coinsGot + '/5';
+      }
+    }
+    // 尖刺碰触（非瓦片化的尖刺已在碰撞中处理）
+    // 旗子
+    if (player.flag && player.x + player.w > player.flag.x && player.y + player.h > player.flag.y - 8) {
+      won = true;
+      document.getElementById('msg').textContent = coinsGot === 5 ? '完美通关！全部金币收集！R 再来' : '到达终点！R 再来';
+    }
+    // 掉落
+    if (player.y > H + 60) die();
+    // 相机
+    camX = Math.max(0, Math.min(LEVELS[0][0].length * TILE - W, player.x - W * 0.4));
+  }
+  function die() {
+    over = true;
+    document.getElementById('msg').textContent = '被尖刺/掉落击败！按 R 重开';
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'r') { loadLevel(); return; }
+    if (k === ' ' || k === 'arrowup' || k === 'w') {
+      e.preventDefault();
+      if (over || won) { loadLevel(); return; }
+      if (player.onGround) player.vy = -JUMP;
+      return;
+    }
+    keys[k] = true;
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(k)) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(-camX, 0);
+    // 背景云
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    for (let i = 0; i < 4; i++) {
+      const bx = i * 260 + 40 - camX * 0.3;
+      ctx.beginPath(); ctx.arc(bx, 60, 18, 0, Math.PI * 2); ctx.arc(bx + 22, 68, 14, 0, Math.PI * 2); ctx.arc(bx - 22, 68, 14, 0, Math.PI * 2); ctx.fill();
+    }
+    // 瓦片
+    for (const t of tiles) {
+      if (t.solid) { ctx.fillStyle = '#8d6e63'; ctx.fillRect(t.x, t.y, TILE, TILE); ctx.fillStyle = '#a1887f'; ctx.fillRect(t.x + 2, t.y + 2, TILE - 4, 6); }
+      else if (t.plat) { ctx.fillStyle = '#4caf50'; ctx.fillRect(t.x, t.y + 6, TILE, 10); ctx.fillStyle = '#81c784'; ctx.fillRect(t.x, t.y + 6, TILE, 4); }
+      else if (t.spike) {
+        ctx.fillStyle = '#ff5252';
+        ctx.beginPath(); ctx.moveTo(t.x, t.y + TILE); ctx.lineTo(t.x + TILE / 2, t.y); ctx.lineTo(t.x + TILE, t.y + TILE); ctx.fill();
+      }
+    }
+    // 金币
+    for (const c of coins) {
+      if (c.got) continue;
+      ctx.fillStyle = '#ffd740';
+      ctx.beginPath(); ctx.arc(c.x, c.y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff3c0';
+      ctx.fillRect(c.x - 2, c.y - 5, 4, 10);
+    }
+    // 终点旗
+    if (player.flag) {
+      ctx.strokeStyle = '#eee'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(player.flag.x + 8, player.flag.y); ctx.lineTo(player.flag.x + 8, player.flag.y - 28); ctx.stroke();
+      ctx.fillStyle = '#ff5252';
+      ctx.beginPath(); ctx.moveTo(player.flag.x + 8, player.flag.y - 28); ctx.lineTo(player.flag.x + 30, player.flag.y - 21); ctx.lineTo(player.flag.x + 8, player.flag.y - 14); ctx.fill();
+    }
+    // 玩家
+    ctx.fillStyle = '#4fc3f7';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(player.x + 4, player.y + 4, 4, 5);
+    ctx.fillRect(player.x + 9, player.y + 4, 4, 5);
+    if (player.flag && player.flag.x - camX < W) {
+      // 终点文字
+    }
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  loadLevel(); draw();
+  document.getElementById('msg').textContent = '← → 移动，空格 / ↑ 跳跃，吃到所有金币并抵达 🚩';
+})();
+</script>
+</body>
+</html>

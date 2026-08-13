@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞机大战</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #05070f; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); cursor: crosshair; }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>✈️ 飞机大战</span><span>得分 <b id="score">0</b></span><span>生命 <b id="lives">3</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">鼠标 / 方向键移动，空格射击</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 480;
+  const plane = { x: W / 2, y: H - 60, r: 14 };
+  let bullets = [], enemies = [], stars = [];
+  let score = 0, lives = 3, over = false, running = false, lastShoot = 0, spawnTimer = 0;
+  let keys = {}, targetX = null, targetY = null;
+
+  for (let i = 0; i < 70; i++) stars.push({ x: Math.random() * W, y: Math.random() * H, s: Math.random() * 1.5 + 0.3 });
+
+  function reset() {
+    score = 0; lives = 3; over = false; bullets = []; enemies = [];
+    document.getElementById('score').textContent = '0';
+    document.getElementById('lives').textContent = '3';
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ') { e.preventDefault(); if (over) reset(); running = true; keys.space = true; return; }
+    keys[k] = true;
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  cv.addEventListener('mousemove', (e) => {
+    const r = cv.getBoundingClientRect();
+    targetX = (e.clientX - r.left) * (W / r.width);
+    targetY = (e.clientY - r.top) * (H / r.height);
+    if (!running && !over) { running = true; document.getElementById('msg').textContent = '空格射击！'; }
+  });
+
+  function spawnEnemy() {
+    const kind = Math.random() < 0.7 ? 0 : 1;
+    enemies.push({
+      x: 20 + Math.random() * (W - 40), y: -24,
+      r: kind === 0 ? 14 : 11,
+      vy: 60 + Math.random() * 70 + score * 0.3,
+      kind,
+      wobble: Math.random() * Math.PI * 2,
+    });
+  }
+
+  function update(dt) {
+    if (over || !running) return;
+    const speed = 220 * dt;
+    let mx = 0, my = 0;
+    if (targetX !== null && targetY !== null) {
+      const dx = targetX - plane.x, dy = targetY - plane.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 3) { mx = dx / dist; my = dy / dist; }
+    } else {
+      if (keys.arrowleft || keys.a) mx -= 1;
+      if (keys.arrowright || keys.d) mx += 1;
+      if (keys.arrowup || keys.w) my -= 1;
+      if (keys.arrowdown || keys.s) my += 1;
+      if (mx && my) { mx *= 0.7071; my *= 0.7071; }
+    }
+    plane.x = Math.max(plane.r, Math.min(W - plane.r, plane.x + mx * speed));
+    plane.y = Math.max(plane.r, Math.min(H - plane.r, plane.y + my * speed));
+
+    if (keys.space && performance.now() - lastShoot > 200) {
+      lastShoot = performance.now();
+      bullets.push({ x: plane.x, y: plane.y - plane.r, vy: -420 });
+    }
+    for (const b of bullets) b.y += b.vy * dt;
+    bullets = bullets.filter((b) => b.y > -20);
+
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(0.4, 1.1 - score * 0.003); }
+    for (const en of enemies) {
+      en.y += en.vy * dt;
+      en.x += Math.sin(en.wobble + en.y * 0.02) * 30 * dt;
+      en.wobble += dt;
+    }
+
+    for (const b of bullets) {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const en = enemies[i];
+        if ((b.x - en.x) ** 2 + (b.y - en.y) ** 2 < (en.r + 4) ** 2) {
+          enemies.splice(i, 1);
+          score += en.kind === 0 ? 10 : 20;
+          document.getElementById('score').textContent = String(score);
+        }
+      }
+    }
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const en = enemies[i];
+      if (en.y > H + 30) { enemies.splice(i, 1); continue; }
+      if ((plane.x - en.x) ** 2 + (plane.y - en.y) ** 2 < (en.r + plane.r) ** 2) {
+        enemies.splice(i, 1);
+        lives -= 1;
+        document.getElementById('lives').textContent = String(lives);
+        if (lives <= 0) { over = true; running = false; }
+      }
+    }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#9aa0c0';
+    for (const s of stars) { ctx.fillRect(s.x, s.y, s.s, s.s); }
+    for (const b of bullets) { ctx.fillStyle = '#40c4ff'; ctx.fillRect(b.x - 2, b.y - 7, 4, 14); }
+    for (const en of enemies) {
+      ctx.save(); ctx.translate(en.x, en.y);
+      ctx.fillStyle = en.kind === 0 ? '#ff5252' : '#ffd740';
+      ctx.beginPath();
+      ctx.moveTo(0, -en.r); ctx.lineTo(en.r * 0.85, en.r * 0.8); ctx.lineTo(0, en.r * 0.4); ctx.lineTo(-en.r * 0.85, en.r * 0.8);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.save(); ctx.translate(plane.x, plane.y);
+    ctx.fillStyle = '#4fc3f7';
+    ctx.beginPath();
+    ctx.moveTo(0, -plane.r); ctx.lineTo(plane.r * 0.85, plane.r * 0.9); ctx.lineTo(0, plane.r * 0.45); ctx.lineTo(-plane.r * 0.85, plane.r * 0.9);
+    ctx.closePath(); ctx.fill();
+    if (running && !over && Math.floor(now / 80) % 2 === 0) {
+      ctx.fillStyle = '#69f0ae';
+      ctx.beginPath(); ctx.moveTo(-5, plane.r * 0.5); ctx.lineTo(5, plane.r * 0.5); ctx.lineTo(0, plane.r * 1.6); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('游戏结束', W / 2, H / 2 - 10);
+      ctx.fillStyle = '#ff7f27'; ctx.font = '18px sans-serif';
+      ctx.fillText('得分 ' + score + '，空格再来一局', W / 2, H / 2 + 28);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  document.getElementById('msg').textContent = '鼠标 / 方向键移动，空格射击';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "title": "迷宫",
+  "description": "递归生成的迷宫：方向键/WASD 走到出口，步数越少越好！",
+  "category": "益智",
+  "tags": ["迷宫", "键盘", "生成算法"],
+  "author": "7d7d 社区",
+  "type": "html5",
+  "emoji": "🌀",
+  "createdAt": 1755105000000
+}

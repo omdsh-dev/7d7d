@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>星际探险</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #101322; color: #d7e3f5; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  #wrap { width: min(94vw, 520px); max-height: 92vh; overflow-y: auto; background: #161a2e; border: 1px solid #2a2d42; border-radius: 16px; padding: 26px 28px; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
+  #title { font-size: 22px; font-weight: 800; color: #ff7f27; margin-bottom: 6px; }
+  #scene { font-size: 15px; line-height: 1.9; white-space: pre-wrap; margin: 14px 0 18px; }
+  #status { font-size: 12.5px; color: #8b90a8; border: 1px solid #2a2d42; border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; }
+  #status b { color: #69f0ae; }
+  .choice { display: block; width: 100%; text-align: left; background: #232741; color: #d7e3f5; border: 1px solid #2a2d42; border-radius: 10px; padding: 11px 14px; margin: 8px 0; font-size: 14px; cursor: pointer; transition: all .15s; }
+  .choice:hover { background: #2b3050; border-color: #ff7f27; transform: translateX(3px); }
+  .ending { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+  .end-1 { color: #69f0ae; } .end-2 { color: #ffd740; } .end-3 { color: #ff5252; } .end-4 { color: #40c4ff; } .end-5 { color: #ab47bc; } .end-6 { color: #ff7f27; }
+  #again { background: #ff7f27; color: #fff; border: none; border-radius: 10px; padding: 11px 22px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  #again:hover { filter: brightness(1.15); }
+  .unlock { font-size: 12px; color: #8b90a8; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="title">🛸 星际探险</div>
+  <div id="status"></div>
+  <div id="scene"></div>
+  <div id="choices"></div>
+  <div id="again-wrap" style="display:none"><button id="again">重新开始</button></div>
+  <div class="unlock" id="unlock"></div>
+</div>
+<script>
+(() => {
+  // ============ 剧情数据 ============
+  const NODES = {
+    start: {
+      text: '西元 2377 年。你——星舰「晨曦号」的舰长——从冷冻舱醒来，警报声刺穿寂静：\n\n"主引擎离线。燃料余量 23%。未知引力源正在捕获本舰。"\n\n舷窗外，一颗幽蓝色的气态巨行星缓缓旋转，它的卫星上闪烁着规律的光点——那显然不是自然现象。\n\n通讯器滋滋作响，一个苍老的声音传来："晨曦号……请回答……这里是殖民地『伊甸』……我们……需要帮助……"',
+      choices: [
+        { text: '📡 回应通讯，向伊甸殖民地靠拢', next: 'eden' },
+        { text: '🔭 先分析那颗卫星上的光点信号', next: 'satellite' },
+        { text: '⚙️ 全力抢修主引擎，先保住飞船', next: 'repair' },
+      ],
+    },
+    eden: {
+      text: '晨曦号在引力弹弓中划出一道弧线，降落在伊甸殖民地的着陆场。\n\n这里没有想象中的废墟——街道干净，植被茂盛，人们微笑着向你挥手。殖民地总督玛雅接待了你：\n\n"舰长，你来得正是时候。我们发现了远古文明的星图，位置就在那颗卫星上。但我们缺少一艘能穿越小行星带的船。"\n\n她停顿了一下："当然，作为交换，我们可以修复你的引擎，并提供足够回程的燃料。"',
+      choices: [
+        { text: '🤝 接受委托：载着科考队前往卫星', next: 'expedition' },
+        { text: '🚫 婉拒：加满燃料，直接返航地球', next: 'go-home' },
+        { text: '🔍 追问：这颗卫星上的「光点」到底是什么', next: 'ask-light' },
+      ],
+    },
+    satellite: {
+      text: '你命令导航 AI 放大卫星表面的信号。\n\n那不是灯光——是一座巨大的环形装置，直径超过四十公里，边缘刻满了看不懂的符号。数据流显示：装置正处于**激活倒计时**。\n\n"警告。"AI 的声音罕见地带上了一丝紧迫，"该装置疑似曲率锚点。若完全激活，将永久锁定本恒星系的时空结构。"\n\n通讯器里，殖民地总督玛雅的声音再次响起："舰长，别碰它！那不是我们建的——是更古老的东西！"',
+      choices: [
+        { text: '🚀 全速冲向装置，在激活前摧毁它', next: 'destroy' },
+        { text: '📡 尝试与装置建立通讯协议', next: 'hail' },
+        { text: '↩️ 撤离：不管它，带着情报返航', next: 'go-home' },
+      ],
+    },
+    repair: {
+      text: '你把自己锁进引擎舱三个小时。汗水浸透了制服，但你成功用备用线圈重组了主引擎的等离子回路。\n\n"引擎恢复 67%。"AI 报告，"但燃料仍不足以返回地球——除非我们利用那颗卫星的引力弹弓。"\n\n你抬头看向舷窗。卫星上的光点依旧规律地闪烁，像是在……等你。',
+      choices: [
+        { text: '🌊 利用卫星引力弹弓加速返航', next: 'go-home' },
+        { text: '🛰️ 先靠近卫星，看看光点的真相', next: 'satellite' },
+      ],
+    },
+    askLight: {
+      text: '玛雅沉默了很久。\n\n"那是一扇门。"她说，"我们在这颗星球上挖出了几块石板——上面记载着：在人类踏足星空之前，曾有文明用这扇门连接过数百个世界。后来他们消失了，门也沉睡了。"\n\n她直视你的眼睛："光点在变亮。这是万年来它第一次苏醒。我们认为……它在等一个带着善意的人。"',
+      choices: [
+        { text: '🔑 前往卫星，尝试与门对话', next: 'hail' },
+        { text: '😨 害怕了：拒绝冒险，返航', next: 'go-home' },
+      ],
+    },
+    expedition: {
+      text: '科考队登船。三天后，晨曦号穿过小行星带，抵达卫星表面。\n\n环形装置近在眼前，比想象中更宏伟。科考队长老科尔曼颤抖着举起仪器："这……这是坐标。数千个星系的坐标。"\n\n他转向你，声音激动："舰长，这门不是武器。它是**航线图**。只要输入坐标，它就能送我们到任何地方。"\n\n你低头看着终端：输入坐标，还是记录数据后离开？',
+      choices: [
+        { text: '🌌 输入地球的坐标，测试传送', next: 'gate-home' },
+        { text: '🗄️ 只记录数据，不触碰装置', next: 'archive' },
+      ],
+    },
+    destroy: {
+      text: '你发射了全部剩余质量的电磁炮。\n\n炮弹击中装置边缘的瞬间，时间仿佛凝固了一秒。然后——装置安然无恙。你的攻击被一层看不见的力场弹开，化为星尘。\n\n倒计时归零。装置亮起温和的蓝光，像一只睁开睡眼的巨兽。没有爆炸，没有湮灭——它只是……启动了。\n\n从此，这片星域的航行坐标永远改写。你的鲁莽换来了一个既无法接近、也无法远离的谜。',
+      ending: 3, endingText: '结局·傲慢的代价', 
+      choices: [],
+    },
+    hail: {
+      text: '你让全舰主频对准装置，发送了一串由斐波那契数列编码的问候。\n\n三秒后，装置回应了。不是信号——是**歌声**。一种低沉的、跨越光年的共振，直接在你的胸腔里回响。\n\n导航屏上浮现出一条新的航线：穿过蓝色的气态巨行星，指向一片从未标注过的星域。\n\n玛雅的声音在通讯器中响起，带着泪意："舰长……它认得我们。它在邀请我们回家。"\n\n晨曦号调转船头，驶向未知。身后，光点渐次熄灭，像完成使命的灯塔。',
+      ending: 1, endingText: '结局·归乡的航线',
+      choices: [],
+    },
+    'go-home': {
+      text: '你选择了返航。晨曦号利用引力弹弓，精准地切向地球轨道。\n\n六个月后，你站在太平洋舰队总部的汇报室里，屏幕上回放着卫星光点的影像。\n\n"所以……你们就这么回来了？"上将问。"那边可能有一整个文明的遗产。"\n\n你沉默。窗外是熟悉的、拥挤的地球。你知道自己会反复梦见那片蓝光，梦见那扇未打开的门。\n\n你安全了。但有些东西，一旦看见，就再也没法假装不知道。',
+      ending: 2, endingText: '结局·安全的遗憾',
+      choices: [],
+    },
+    'gate-home': {
+      text: '你输入了地球的坐标。装置发出一声悠长的共鸣，舱体微微震颤——然后，舷窗外不是地球。\n\n是一片从未见过的星海。坐标被拦截、改写，送往了一个你无法理解的坐标系。\n\n通讯中断。燃料耗尽。晨曦号成为这片星海里的一枚漂流瓶。\n\n你望着窗外的陌生星团，忽然想起玛雅说过的话："它不是航线图——它是**邀请**。"\n\n也许，这才是它真正想送你去的地方。',
+      ending: 5, endingText: '结局·漂流者',
+      choices: [],
+    },
+    archive: {
+      text: '你拒绝了传送测试。科考队花了两周时间，完整记录了装置表面 12 万组符号。\n\n返航后，这份数据被称为「晨曦协议」，成为人类星际探索史上最重要的考古发现。\n\n十年后，由你资助的深空望远镜在猎户座旋臂外侧，捕捉到了与卫星光点相同频率的信号源。\n\n你站在观测站的落地窗前，对年轻的助手说："把坐标记下来。总有一天，我们会去赴约。"\n\n门没有关。它在等一个准备好的人。',
+      ending: 6, endingText: '结局·未赴的约',
+      choices: [],
+    },
+  };
+  const ENDINGS = {
+    1: { label: '归乡的航线', cls: 'end-1' },
+    2: { label: '安全的遗憾', cls: 'end-2' },
+    3: { label: '傲慢的代价', cls: 'end-3' },
+    4: { label: '未知结局', cls: 'end-4' },
+    5: { label: '漂流者', cls: 'end-5' },
+    6: { label: '未赴的约', cls: 'end-6' },
+  };
+
+  // ============ 状态 ============
+  let unlocked = new Set();
+  try { unlocked = new Set(JSON.parse(localStorage.getItem('7d7d-starquest-endings') ?? '[]')) } catch { }
+  let inventory = { artifact: false };
+  let nodeId = 'start';
+
+  const $ = (id) => document.getElementById(id);
+  const renderUnlock = () => {
+    const total = Object.keys(ENDINGS).length;
+    const list = Object.entries(ENDINGS).map(([id, e]) => {
+      const got = unlocked.has(Number(id));
+      return `<span style="color:${got ? '#69f0ae' : '#3a3f5c'}">${got ? '✓' : '·'} ${e.label}</span>`;
+    }).join('　');
+    $('unlock').textContent = `已解锁结局：${unlocked.size}/${total}`;
+    $('unlock').innerHTML += `<br>${list}`;
+  };
+
+  function show() {
+    const node = NODES[nodeId];
+    $('scene').textContent = node.text;
+    $('status').innerHTML = node.ending
+      ? `📖 达成结局：<b>${ENDINGS[node.ending].label}</b>`
+      : `🛸 晨曦号 · ${node.choices.length} 个选择`;
+    const wrap = $('choices');
+    wrap.innerHTML = '';
+    if (node.ending) {
+      unlocked.add(node.ending);
+      try { localStorage.setItem('7d7d-starquest-endings', JSON.stringify([...unlocked])) } catch { }
+      $('again-wrap').style.display = 'block';
+      $('again').onclick = () => { nodeId = 'start'; show(); };
+    } else {
+      $('again-wrap').style.display = 'none';
+      for (const c of node.choices) {
+        const btn = document.createElement('button');
+        btn.className = 'choice';
+        btn.textContent = c.text;
+        btn.onclick = () => { nodeId = c.next; show(); };
+        wrap.appendChild(btn);
+      }
+    }
+    renderUnlock();
+    const w = $('wrap');
+    w.scrollTop = 0;
+  }
+
+  show();
+})();
+</script>
+</body>
+</html>

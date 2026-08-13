@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>双人乒乓</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #0a0c16; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🏓 双人乒乓</span><span><b id="s1">0</b> : <b id="s2">0</b></span><span>先到 5 分</span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">左：W/S · 右：↑/↓ · 空格发球</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 480;
+  const PW = 12, PH = 74, PAD = 16, BALL_R = 7, WIN = 5;
+  let p1 = { y: H / 2 - PH / 2 }, p2 = { y: H / 2 - PH / 2 };
+  let ball = null, s1 = 0, s2 = 0, over = false, running = false;
+  let keys = {};
+
+  function serve(direction) {
+    const ang = (Math.random() - 0.5) * 0.7;
+    ball = { x: W / 2, y: H / 2, vx: 260 * direction, vy: 260 * ang };
+  }
+  function reset() {
+    s1 = 0; s2 = 0; over = false;
+    document.getElementById('s1').textContent = '0';
+    document.getElementById('s2').textContent = '0';
+    document.getElementById('msg').textContent = '左：W/S · 右：↑/↓ · 空格发球';
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ') {
+      e.preventDefault();
+      if (over) reset();
+      running = true;
+      if (ball === null) serve(1);
+      return;
+    }
+    keys[k] = true;
+    if (['arrowup', 'arrowdown'].includes(k)) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+  function update(dt) {
+    if (over || !running || ball === null) return;
+    if (keys.w) p1.y -= 280 * dt;
+    if (keys.s) p1.y += 280 * dt;
+    if (keys.arrowup) p2.y -= 280 * dt;
+    if (keys.arrowdown) p2.y += 280 * dt;
+    p1.y = Math.max(0, Math.min(H - PH, p1.y));
+    p2.y = Math.max(0, Math.min(H - PH, p2.y));
+
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+    if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = -ball.vy; }
+    if (ball.y > H - BALL_R) { ball.y = H - BALL_R; ball.vy = -ball.vy; }
+
+    // 球拍反弹：击中位置决定反弹角
+    const bounce = (p) => {
+      const rel = (ball.y - (p.y + PH / 2)) / (PH / 2);
+      ball.vy = Math.max(-1, Math.min(1, rel)) * 300;
+      ball.vx = -ball.vx * 1.06;
+    };
+    if (ball.vx < 0 && ball.x - BALL_R < PAD + PW && ball.x - BALL_R > PAD - 10 && ball.y > p1.y && ball.y < p1.y + PH) {
+      ball.x = PAD + PW + BALL_R; bounce(p1);
+    }
+    if (ball.vx > 0 && ball.x + BALL_R > W - PAD - PW && ball.x + BALL_R < W - PAD + 10 && ball.y > p2.y && ball.y < p2.y + PH) {
+      ball.x = W - PAD - PW - BALL_R; bounce(p2);
+    }
+
+    if (ball.x < -30) { s2 += 1; document.getElementById('s2').textContent = String(s2); ball = null; if (s2 >= WIN) { over = true; running = false; } else serve(1); }
+    if (ball.x > W + 30) { s1 += 1; document.getElementById('s1').textContent = String(s1); ball = null; if (s1 >= WIN) { over = true; running = false; } else serve(-1); }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    ctx.clearRect(0, 0, W, H);
+    // 中线
+    ctx.strokeStyle = '#2a2d42'; ctx.lineWidth = 3; ctx.setLineDash([10, 12]);
+    ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+    ctx.setLineDash([]);
+    // 球拍
+    ctx.fillStyle = '#40c4ff';
+    ctx.fillRect(PAD, p1.y, PW, PH);
+    ctx.fillStyle = '#ff7f27';
+    ctx.fillRect(W - PAD - PW, p2.y, PW, PH);
+    // 球
+    if (ball) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+    }
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText((s1 > s2 ? '左' : '右') + '方获胜！', W / 2, H / 2 - 10);
+      ctx.font = '16px sans-serif'; ctx.fillStyle = '#ff7f27';
+      ctx.fillText('空格再来一局', W / 2, H / 2 + 24);
+    } else if (!running) {
+      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('双人乒乓', W / 2, H / 2 - 20);
+      ctx.font = '14px sans-serif'; ctx.fillStyle = '#8b90a8';
+      ctx.fillText('左：W/S · 右：↑/↓ · 空格发球', W / 2, H / 2 + 12);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  reset();
+})();
+</script>
+</body>
+</html>

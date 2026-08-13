@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>贪吃蛇</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #101322; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🐍 贪吃蛇</span><span>长度 <b id="len">3</b></span><span>最高 <b id="best">0</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">方向键 / WASD 控制，Space 重开</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const N = 20, SIZE = 480, CELL = SIZE / N;
+  let snake = [{ x: 9, y: 10 }, { x: 8, y: 10 }, { x: 7, y: 10 }];
+  let dir = { x: 1, y: 0 }, nextDir = { x: 1, y: 0 };
+  let food = null, score = 0, over = false, running = false, best = 0;
+  try { best = Number(localStorage.getItem('7d7d-snake-best') ?? '0') || 0; } catch { best = 0; }
+  document.getElementById('best').textContent = String(best);
+
+  function placeFood() {
+    const free = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
+    }
+    food = free.length ? free[Math.floor(Math.random() * free.length)] : null;
+  }
+
+  function reset() {
+    snake = [{ x: 9, y: 10 }, { x: 8, y: 10 }, { x: 7, y: 10 }];
+    dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
+    score = 0; over = false;
+    document.getElementById('len').textContent = '3';
+    placeFood();
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') {
+      e.preventDefault();
+      if (over) { reset(); return; }
+      if (!running) { running = true; }
+      return;
+    }
+    const want =
+      k === 'arrowup' || k === 'w' ? { x: 0, y: -1 } :
+      k === 'arrowdown' || k === 's' ? { x: 0, y: 1 } :
+      k === 'arrowleft' || k === 'a' ? { x: -1, y: 0 } :
+      k === 'arrowright' || k === 'd' ? { x: 1, y: 0 } : null;
+    if (want === null) return;
+    e.preventDefault();
+    if (!running) { running = true; }
+    if (want.x !== -dir.x || want.y !== -dir.y) nextDir = want;
+  });
+
+  function step() {
+    if (over) return;
+    if (!running) { requestAnimationFrame(step); return; }
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    const hitWall = head.x < 0 || head.y < 0 || head.x >= N || head.y >= N;
+    const hitSelf = snake.some(s => s.x === head.x && s.y === head.y);
+    if (hitWall || hitSelf) {
+      over = true; running = false;
+      if (score > best) {
+        best = score;
+        try { localStorage.setItem('7d7d-snake-best', String(best)); } catch { /* 沙箱可能禁用存储 */ }
+        document.getElementById('best').textContent = String(best);
+      }
+      document.getElementById('msg').textContent = '游戏结束！得分 ' + score + '，Space 重开';
+      return;
+    }
+    snake.unshift(head);
+    if (food !== null && head.x === food.x && head.y === food.y) {
+      score += 1;
+      document.getElementById('len').textContent = String(snake.length);
+      placeFood();
+    } else {
+      snake.pop();
+    }
+    setTimeout(step, 140);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.strokeStyle = '#1a1d31';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < N; i++) {
+      ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, SIZE); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(SIZE, i * CELL); ctx.stroke();
+    }
+    if (food !== null) {
+      ctx.fillStyle = '#ff5252';
+      ctx.beginPath();
+      ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? '#ff7f27' : '#4caf50';
+      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+      if (i === 0) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(s.x * CELL + CELL * 0.55, s.y * CELL + CELL * 0.25, 3, 4);
+        ctx.fillRect(s.x * CELL + CELL * 0.55, s.y * CELL + CELL * 0.6, 3, 4);
+      }
+    });
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 34px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('游戏结束', SIZE / 2, SIZE / 2 - 10);
+      ctx.font = '18px sans-serif';
+      ctx.fillStyle = '#ff7f27';
+      ctx.fillText('得分 ' + score, SIZE / 2, SIZE / 2 + 28);
+    }
+    requestAnimationFrame(draw);
+  }
+
+  placeFood();
+  draw();
+  document.getElementById('msg').textContent = '方向键 / WASD 控制，Space 开始';
+  step();
+})();
+</script>
+</body>
+</html>

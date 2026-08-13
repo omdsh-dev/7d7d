@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打砖块</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #101322; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>🧱 打砖块</span><span>得分 <b id="score">0</b></span><span>生命 <b id="lives">3</b></span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">← → / A D 移动，Space 发球</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 480;
+  const PADDLE_W = 90, PADDLE_H = 12, PADDLE_Y = H - 36;
+  const BALL_R = 7;
+  const COLS = 8, ROWS = 5, BRICK_TOP = 48;
+  const bw = W / COLS, bh = 22;
+  const COLORS = ['#ff5252', '#ff7f27', '#ffd740', '#69f0ae', '#40c4ff'];
+
+  let paddle = { x: (W - PADDLE_W) / 2 };
+  let ball = null;
+  let bricks = [];
+  let score = 0, lives = 3, over = false, won = false, running = false;
+  let keys = { left: false, right: false };
+
+  function buildBricks() {
+    bricks = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      bricks.push({ x: c * bw + 2, y: BRICK_TOP + r * (bh + 4), w: bw - 4, h: bh, alive: true, color: COLORS[r % COLORS.length] });
+    }
+  }
+
+  function reset() {
+    score = 0; lives = 3; over = false; won = false;
+    document.getElementById('score').textContent = '0';
+    document.getElementById('lives').textContent = '3';
+    buildBricks();
+    ball = { x: W / 2, y: PADDLE_Y - BALL_R - 2, vx: 3.2, vy: -3.2 };
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') {
+      e.preventDefault();
+      if (over || won) { reset(); return; }
+      running = true;
+      return;
+    }
+    if (k === 'arrowleft' || k === 'a') { keys.left = true; e.preventDefault(); }
+    if (k === 'arrowright' || k === 'd') { keys.right = true; e.preventDefault(); }
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft' || k === 'a') keys.left = false;
+    if (k === 'arrowright' || k === 'd') keys.right = false;
+  });
+
+  function update() {
+    if (over || won || !running || ball === null) return;
+    if (keys.left) paddle.x = Math.max(0, paddle.x - 6);
+    if (keys.right) paddle.x = Math.min(W - PADDLE_W, paddle.x + 6);
+
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    if (ball.x < BALL_R) { ball.x = BALL_R; ball.vx = -ball.vx; }
+    if (ball.x > W - BALL_R) { ball.x = W - BALL_R; ball.vx = -ball.vx; }
+    if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = -ball.vy; }
+
+    // 挡板反弹：按击中位置改变水平速度
+    if (ball.vy > 0 && ball.y + BALL_R >= PADDLE_Y && ball.y + BALL_R <= PADDLE_Y + PADDLE_H + 6
+        && ball.x >= paddle.x - BALL_R && ball.x <= paddle.x + PADDLE_W + BALL_R) {
+      const rel = (ball.x - (paddle.x + PADDLE_W / 2)) / (PADDLE_W / 2);
+      ball.vx = Math.max(-5, Math.min(5, rel * 5));
+      ball.vy = -Math.abs(ball.vy);
+      ball.y = PADDLE_Y - BALL_R;
+    }
+
+    // 砖块碰撞
+    for (const b of bricks) {
+      if (!b.alive) continue;
+      if (ball.x + BALL_R > b.x && ball.x - BALL_R < b.x + b.w
+          && ball.y + BALL_R > b.y && ball.y - BALL_R < b.y + b.h) {
+        b.alive = false;
+        score += 10;
+        document.getElementById('score').textContent = String(score);
+        // 简单反弹：从哪个方向进入就弹回哪个方向
+        const dx = ball.x - (b.x + b.w / 2);
+        const dy = ball.y - (b.y + b.h / 2);
+        if (Math.abs(dx / (b.w / 2)) > Math.abs(dy / (b.h / 2))) ball.vx = -ball.vx;
+        else ball.vy = -ball.vy;
+        break;
+      }
+    }
+
+    if (bricks.every(b => !b.alive)) { won = true; running = false; return; }
+
+    // 掉出底部
+    if (ball.y > H + BALL_R) {
+      lives -= 1;
+      document.getElementById('lives').textContent = String(lives);
+      if (lives <= 0) { over = true; running = false; return; }
+      ball = { x: W / 2, y: PADDLE_Y - BALL_R - 2, vx: 3.2, vy: -3.2 };
+      running = false;
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const b of bricks) {
+      if (!b.alive) continue;
+      ctx.fillStyle = b.color;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = 'rgba(255,255,255,.25)';
+      ctx.fillRect(b.x, b.y, b.w, 5);
+    }
+    ctx.fillStyle = '#ff7f27';
+    ctx.fillRect(paddle.x, PADDLE_Y, PADDLE_W, PADDLE_H);
+    if (ball !== null) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (over) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('游戏结束', W / 2, H / 2 - 10);
+      ctx.font = '18px sans-serif'; ctx.fillStyle = '#ff7f27';
+      ctx.fillText('得分 ' + score, W / 2, H / 2 + 28);
+    } else if (won) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#69f0ae'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('通关！', W / 2, H / 2 - 10);
+      ctx.font = '18px sans-serif'; ctx.fillStyle = '#ff7f27';
+      ctx.fillText('得分 ' + score + '，Space 再来一局', W / 2, H / 2 + 28);
+    }
+    requestAnimationFrame(draw);
+  }
+
+  reset();
+  draw();
+  document.getElementById('msg').textContent = '← → / A D 移动，Space 发球';
+  setInterval(update, 16);
+})();
+</script>
+</body>
+</html>

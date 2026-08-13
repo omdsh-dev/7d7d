@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeetCode 刷题器</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14151f; color: #e8e9f2; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #1c1e2e; border-bottom: 1px solid #2a2d42; flex: none; }
+  .logo { font-size: 17px; font-weight: 800; color: #ff7f27; }
+  .stat { font-size: 13px; color: #8b90a8; }
+  .stat b { color: #69f0ae; }
+  .chips { display: flex; gap: 8px; margin-left: auto; }
+  .chip { padding: 5px 13px; border: 1px solid #2a2d42; border-radius: 999px; background: transparent; color: #b9bdd6; font-size: 12.5px; cursor: pointer; }
+  .chip.active { background: #ff7f27; border-color: #ff7f27; color: #fff; font-weight: 600; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #list { width: 240px; min-width: 200px; overflow-y: auto; border-right: 1px solid #2a2d42; padding: 8px; }
+  .item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .item:hover { background: #232741; }
+  .item.active { background: #2b3050; }
+  .item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .item .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .tag { font-size: 11px; color: #8b90a8; flex: none; }
+  .item.solved .name { color: #69f0ae; }
+  .item.solved .done { flex: none; color: #69f0ae; font-size: 12px; }
+  #detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .desc { padding: 14px 18px 10px; overflow-y: auto; flex: 1; }
+  .desc h2 { margin: 0 0 6px; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .diff { font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 600; }
+  .diff.easy { background: rgba(105,240,174,.15); color: #69f0ae; }
+  .diff.mid { background: rgba(255,215,64,.15); color: #ffd740; }
+  .diff.hard { background: rgba(255,82,82,.15); color: #ff5252; }
+  .tags { font-size: 12px; color: #8b90a8; margin-bottom: 10px; }
+  .desc p { font-size: 13.5px; line-height: 1.7; margin: 8px 0; }
+  pre { background: #0d0f1a; border: 1px solid #2a2d42; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; color: #b9d0f0; }
+  .editorbar { display: flex; align-items: center; gap: 10px; padding: 8px 18px; border-top: 1px solid #2a2d42; flex: none; }
+  button { border: none; border-radius: 8px; padding: 7px 16px; font-size: 13px; cursor: pointer; }
+  #run { background: #2a6fdb; color: #fff; }
+  #submit { background: #ff7f27; color: #fff; font-weight: 600; }
+  #reset { background: #2a2d42; color: #b9bdd6; }
+  button:hover { filter: brightness(1.15); }
+  textarea { flex: none; width: calc(100% - 36px); margin: 0 18px 10px; height: 150px; background: #0d0f1a; color: #d7e3f5; border: 1px solid #2a2d42; border-radius: 8px; padding: 10px 12px; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; outline: none; }
+  textarea:focus { border-color: #2a6fdb; }
+  #results { flex: none; max-height: 160px; overflow-y: auto; padding: 0 18px 12px; font-size: 12.5px; }
+  .case { padding: 4px 0; }
+  .case.ok { color: #69f0ae; }
+  .case.fail { color: #ff8a80; }
+  .case.err { color: #ffd740; }
+  .summary { font-size: 13px; font-weight: 600; padding: 6px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="logo">💻 LeetCode 刷题器</span>
+    <span class="stat">已通过 <b id="solved">0</b> / <span id="total">15</span></span>
+    <div class="chips" id="chips">
+      <button class="chip active" data-f="all">全部</button>
+      <button class="chip" data-f="easy">简单</button>
+      <button class="chip" data-f="mid">中等</button>
+      <button class="chip" data-f="hard">困难</button>
+    </div>
+  </header>
+  <main>
+    <div id="list"></div>
+    <div id="detail">
+      <div class="desc" id="desc"></div>
+      <textarea id="code" spellcheck="false" placeholder="// 在这里写你的解法"></textarea>
+      <div class="editorbar">
+        <button id="run">▶ 运行测试</button>
+        <button id="submit">✓ 提交判题</button>
+        <button id="reset">重置代码</button>
+        <span class="stat" id="hint" style="margin-left:auto">通过全部用例即通关</span>
+      </div>
+      <div id="results"></div>
+    </div>
+  </main>
+</div>
+<script>
+(() => {
+  // ============ 题库 ============
+  const PROBLEMS = [
+    {
+      id: 'twoSum', name: '两数之和', diff: 'easy', tags: ['数组', '哈希表'],
+      desc: '给定一个整数数组 <code>nums</code> 和一个整数目标值 <code>target</code>，请你在该数组中找出和为目标值的两个整数，并返回它们的下标（顺序不限）。',
+      example: '输入：nums = [2,7,11,15], target = 9\n输出：[0,1]\n解释：因为 nums[0] + nums[1] == 9。',
+      fn: 'twoSum', starter: 'function twoSum(nums, target) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[2, 7, 11, 15], 9], expected: [0, 1], checker: 'pair' },
+        { input: [[3, 2, 4], 6], expected: [1, 2], checker: 'pair' },
+        { input: [[3, 3], 6], expected: [0, 1], checker: 'pair' },
+        { input: [[1, 5, 9, 2], 11], expected: [2, 3], checker: 'pair' },
+      ],
+    },
+    {
+      id: 'isValid', name: '有效的括号', diff: 'easy', tags: ['栈', '字符串'],
+      desc: '给定一个只包括 <code>()[]{}</code> 的字符串 <code>s</code>，判断字符串是否有效。左括号必须用相同类型的右括号闭合，且按正确顺序闭合。',
+      example: '输入：s = "()[]{}"\n输出：true',
+      fn: 'isValid', starter: 'function isValid(s) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: ['()'], expected: true },
+        { input: ['()[]{}'], expected: true },
+        { input: ['(]'], expected: false },
+        { input: ['([)]'], expected: false },
+        { input: ['{[]}'], expected: true },
+        { input: [''], expected: true },
+      ],
+    },
+    {
+      id: 'climbStairs', name: '爬楼梯', diff: 'easy', tags: ['动态规划'],
+      desc: '假设你正在爬楼梯。需要 <code>n</code> 阶才能到达楼顶。每次你可以爬 1 或 2 个台阶。你有多少种不同的方法可以爬到楼顶？',
+      example: '输入：n = 3\n输出：3\n解释：三种方法：1+1+1、1+2、2+1。',
+      fn: 'climbStairs', starter: 'function climbStairs(n) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [1], expected: 1 },
+        { input: [2], expected: 2 },
+        { input: [3], expected: 3 },
+        { input: [10], expected: 89 },
+        { input: [45], expected: 1836311903 },
+      ],
+    },
+    {
+      id: 'maxSubArray', name: '最大子数组和', diff: 'easy', tags: ['动态规划', '分治'],
+      desc: '给你一个整数数组 <code>nums</code>，请你找出一个具有最大和的连续子数组（子数组最少包含一个元素），返回其最大和。',
+      example: '输入：nums = [-2,1,-3,4,-1,2,1,-5,4]\n输出：6\n解释：连续子数组 [4,-1,2,1] 的和最大，为 6。',
+      fn: 'maxSubArray', starter: 'function maxSubArray(nums) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[-2, 1, -3, 4, -1, 2, 1, -5, 4]], expected: 6 },
+        { input: [[1]], expected: 1 },
+        { input: [[5, 4, -1, 7, 8]], expected: 23 },
+        { input: [[-1]], expected: -1 },
+        { input: [[-2, -1]], expected: -1 },
+      ],
+    },
+    {
+      id: 'maxProfit', name: '买卖股票的最佳时机', diff: 'easy', tags: ['贪心'],
+      desc: '给定数组 <code>prices</code>，它的第 i 个元素是一支股票第 i 天的价格。你只能选择某一天买入并选择未来某一天卖出，求能获得的最大利润；无法获利返回 0。',
+      example: '输入：prices = [7,1,5,3,6,4]\n输出：5（第 2 天买，第 5 天卖）',
+      fn: 'maxProfit', starter: 'function maxProfit(prices) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[7, 1, 5, 3, 6, 4]], expected: 5 },
+        { input: [[7, 6, 4, 3, 1]], expected: 0 },
+        { input: [[1, 2]], expected: 1 },
+        { input: [[2, 4, 1]], expected: 2 },
+      ],
+    },
+    {
+      id: 'singleNumber', name: '只出现一次的数字', diff: 'easy', tags: ['位运算'],
+      desc: '给定一个非空整数数组，除了某个元素只出现一次以外，其余每个元素均出现两次。找出那个只出现了一次的元素（尝试只用线性时间 + 常数空间）。',
+      example: '输入：nums = [4,1,2,1,2]\n输出：4',
+      fn: 'singleNumber', starter: 'function singleNumber(nums) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[2, 2, 1]], expected: 1 },
+        { input: [[4, 1, 2, 1, 2]], expected: 4 },
+        { input: [[1]], expected: 1 },
+        { input: [[7, 3, 5, 3, 7, 5, 9]], expected: 9 },
+      ],
+    },
+    {
+      id: 'plusOne', name: '加一', diff: 'easy', tags: ['数组', '模拟'],
+      desc: '给定一个由整数组成的非空数组表示的非负整数，在该数的基础上加一。最高位数字存放在数组首位，数组中每个元素只存储单个数字。',
+      example: '输入：digits = [1,2,3]\n输出：[1,2,4]',
+      fn: 'plusOne', starter: 'function plusOne(digits) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[1, 2, 3]], expected: [1, 2, 4] },
+        { input: [[4, 3, 2, 1]], expected: [4, 3, 2, 2] },
+        { input: [[9]], expected: [1, 0] },
+        { input: [[9, 9]], expected: [1, 0, 0] },
+        { input: [[0]], expected: [1] },
+      ],
+    },
+    {
+      id: 'moveZeroes', name: '移动零', diff: 'easy', tags: ['数组', '双指针'],
+      desc: '给定一个数组 <code>nums</code>，编写一个函数将所有 0 移动到数组的末尾，同时保持非零元素的相对顺序。<b>必须原地修改</b>，不复制数组。',
+      example: '输入：nums = [0,1,0,3,12]\n输出：[1,3,12,0,0]',
+      fn: 'moveZeroes', starter: 'function moveZeroes(nums) {\n  // 原地修改 nums，无需返回值\n}',
+      cases: [
+        { input: [[0, 1, 0, 3, 12]], expected: [1, 3, 12, 0, 0], checker: 'mutate' },
+        { input: [[0]], expected: [0], checker: 'mutate' },
+        { input: [[1, 0, 2, 0, 3]], expected: [1, 2, 3, 0, 0], checker: 'mutate' },
+        { input: [[0, 0, 1]], expected: [1, 0, 0], checker: 'mutate' },
+      ],
+    },
+    {
+      id: 'longestCommonPrefix', name: '最长公共前缀', diff: 'easy', tags: ['字符串'],
+      desc: '编写一个函数来查找字符串数组中的最长公共前缀。如果不存在公共前缀，返回空字符串 ""。',
+      example: '输入：strs = ["flower","flow","flight"]\n输出："fl"',
+      fn: 'longestCommonPrefix', starter: 'function longestCommonPrefix(strs) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [['flower', 'flow', 'flight']], expected: 'fl' },
+        { input: [['dog', 'racecar', 'car']], expected: '' },
+        { input: [['']], expected: '' },
+        { input: [['a']], expected: 'a' },
+        { input: [['ab', 'abc', 'abd']], expected: 'ab' },
+      ],
+    },
+    {
+      id: 'lengthOfLongestSubstring', name: '无重复字符的最长子串', diff: 'mid', tags: ['滑动窗口'],
+      desc: '给定一个字符串 <code>s</code>，请你找出其中不含有重复字符的最长子串的长度。',
+      example: '输入：s = "abcabcbb"\n输出：3（"abc"）',
+      fn: 'lengthOfLongestSubstring', starter: 'function lengthOfLongestSubstring(s) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: ['abcabcbb'], expected: 3 },
+        { input: ['bbbbb'], expected: 1 },
+        { input: ['pwwkew'], expected: 3 },
+        { input: [''], expected: 0 },
+        { input: [' '], expected: 1 },
+        { input: ['dvdf'], expected: 3 },
+      ],
+    },
+    {
+      id: 'threeSum', name: '三数之和', diff: 'mid', tags: ['双指针', '排序'],
+      desc: '给你一个整数数组 <code>nums</code>，判断是否存在三元组 [nums[i], nums[j], nums[k]] 满足 i、j、k 互不相同且三数之和为 0。返回所有不重复的三元组。',
+      example: '输入：nums = [-1,0,1,2,-1,-4]\n输出：[[-1,-1,2],[-1,0,1]]',
+      fn: 'threeSum', starter: 'function threeSum(nums) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[-1, 0, 1, 2, -1, -4]], expected: [[-1, -1, 2], [-1, 0, 1]], checker: 'triplets' },
+        { input: [[0, 1, 1]], expected: [], checker: 'triplets' },
+        { input: [[0, 0, 0]], expected: [[0, 0, 0]], checker: 'triplets' },
+        { input: [[-2, 0, 1, 1, 2]], expected: [[-2, 0, 2], [-2, 1, 1]], checker: 'triplets' },
+      ],
+    },
+    {
+      id: 'maxArea', name: '盛最多水的容器', diff: 'mid', tags: ['双指针', '贪心'],
+      desc: '给定长度为 n 的整数数组 <code>height</code>，代表 n 条垂直线。找出其中的两条线，使它们与 x 轴共同构成的容器可以容纳最多的水（面积 = 距离 × 较矮高度）。',
+      example: '输入：height = [1,8,6,2,5,4,8,3,7]\n输出：49',
+      fn: 'maxArea', starter: 'function maxArea(height) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[1, 8, 6, 2, 5, 4, 8, 3, 7]], expected: 49 },
+        { input: [[1, 1]], expected: 1 },
+        { input: [[4, 3, 2, 1, 4]], expected: 16 },
+        { input: [[1, 2, 1]], expected: 2 },
+      ],
+    },
+    {
+      id: 'canJump', name: '跳跃游戏', diff: 'mid', tags: ['贪心'],
+      desc: '给定一个非负整数数组 <code>nums</code>，你最初位于数组的第一个下标。数组中的每个元素代表你在该位置可以跳跃的最大长度。判断你是否能够到达最后一个下标。',
+      example: '输入：nums = [2,3,1,1,4]\n输出：true',
+      fn: 'canJump', starter: 'function canJump(nums) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[2, 3, 1, 1, 4]], expected: true },
+        { input: [[3, 2, 1, 0, 4]], expected: false },
+        { input: [[0]], expected: true },
+        { input: [[2, 0, 0]], expected: true },
+        { input: [[1, 0, 1, 0]], expected: false },
+      ],
+    },
+    {
+      id: 'trap', name: '接雨水', diff: 'hard', tags: ['双指针', '动态规划'],
+      desc: '给定 n 个非负整数表示每个宽度为 1 的柱子的高度图，计算按此排列的柱子，下雨之后能接多少雨水。',
+      example: '输入：height = [0,1,0,2,1,0,1,3,2,1,2,1]\n输出：6',
+      fn: 'trap', starter: 'function trap(height) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: [[0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]], expected: 6 },
+        { input: [[4, 2, 0, 3, 2, 5]], expected: 9 },
+        { input: [[2, 0, 2]], expected: 2 },
+        { input: [[3, 0, 0, 2, 0, 4]], expected: 10 },
+      ],
+    },
+    {
+      id: 'longestValidParentheses', name: '最长有效括号', diff: 'hard', tags: ['栈', '动态规划'],
+      desc: '给你一个只包含 <code>(</code> 和 <code>)</code> 的字符串，找出最长有效（格式正确且连续）括号子串的长度。',
+      example: '输入：s = ")()())"\n输出：4（"()()"）',
+      fn: 'longestValidParentheses', starter: 'function longestValidParentheses(s) {\n  // 在这里写你的代码\n}',
+      cases: [
+        { input: ['(()'], expected: 2 },
+        { input: [')()())'], expected: 4 },
+        { input: [''], expected: 0 },
+        { input: ['()(())'], expected: 6 },
+        { input: ['()(()'], expected: 2 },
+      ],
+    },
+  ];
+
+  // ============ 判题核心 ============
+  function deepEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== typeof b) return false;
+    if (a === null || b === null) return false;
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      return a.every((v, i) => deepEqual(v, b[i]));
+    }
+    if (typeof a === 'object') {
+      const ka = Object.keys(a), kb = Object.keys(b);
+      return ka.length === kb.length && ka.every(k => deepEqual(a[k], b[k]));
+    }
+    return false;
+  }
+  function json(v) { try { return JSON.stringify(v) } catch { return String(v) } }
+
+  function normalizePair(v) { return Array.isArray(v) ? [...v].sort((x, y) => x - y) : v }
+  function normalizeTriplets(v) {
+    if (!Array.isArray(v)) return v;
+    return v.map(t => [...t].sort((x, y) => x - y)).sort((x, y) => json(x).localeCompare(json(y)));
+  }
+  function normalize(actual, checker) {
+    if (checker === 'pair') return normalizePair(actual);
+    if (checker === 'triplets') return normalizeTriplets(actual);
+    return actual;
+  }
+
+  function runCase(fn, c) {
+    try {
+      let actual;
+      if (c.checker === 'mutate') {
+        const arg = JSON.parse(JSON.stringify(c.input[0]));
+        const ret = fn(arg);
+        actual = ret === undefined ? arg : ret;
+      } else {
+        actual = fn(...c.input);
+      }
+      const ok = deepEqual(normalize(actual, c.checker), normalize(c.expected, c.checker));
+      return { ok, actual, error: null };
+    } catch (e) {
+      return { ok: false, actual: null, error: String(e && e.message || e) };
+    }
+  }
+
+  function compile(fnName, code) {
+    // 支持函数声明与 const 赋值两种写法，按函数名取回
+    return new Function(code + `\n;return typeof ${fnName} === 'function' ? ${fnName} : null;`)();
+  }
+
+  // ============ 状态与 UI ============
+  let solved = new Set();
+  try { solved = new Set(JSON.parse(localStorage.getItem('7d7d-leetcode-solved') ?? '[]')) } catch { }
+  let filter = 'all', current = PROBLEMS[0];
+  const drafts = {};
+  try { Object.assign(drafts, JSON.parse(localStorage.getItem('7d7d-leetcode-drafts') ?? '{}')) } catch { }
+
+  const $ = (id) => document.getElementById(id);
+  const listEl = $('list'), descEl = $('desc'), codeEl = $('code'), resultsEl = $('results');
+
+  function saveSolved() {
+    try { localStorage.setItem('7d7d-leetcode-solved', JSON.stringify([...solved])) } catch { }
+    $('solved').textContent = String(solved.size);
+  }
+  function saveDraft(id, code) {
+    drafts[id] = code;
+    try { localStorage.setItem('7d7d-leetcode-drafts', JSON.stringify(drafts)) } catch { }
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    for (const p of PROBLEMS) {
+      if (filter !== 'all' && p.diff !== filter) continue;
+      const el = document.createElement('div');
+      el.className = 'item' + (p.id === current.id ? ' active' : '') + (solved.has(p.id) ? ' solved' : '');
+      el.innerHTML = `<span class="dot" style="background:${diffColor(p.diff)}"></span><span class="name">${p.name}</span>${solved.has(p.id) ? '<span class="done">✓</span>' : `<span class="tag">${p.tags[0]}</span>`}`;
+      el.onclick = () => select(p.id);
+      listEl.appendChild(el);
+    }
+  }
+  function diffColor(d) { return d === 'easy' ? '#69f0ae' : d === 'mid' ? '#ffd740' : '#ff5252' }
+  function diffName(d) { return d === 'easy' ? '简单' : d === 'mid' ? '中等' : '困难' }
+
+  function select(id) {
+    const p = PROBLEMS.find(x => x.id === id);
+    if (!p) return;
+    current = p;
+    renderList();
+    descEl.innerHTML = `<h2>${p.name} <span class="diff ${p.diff}">${diffName(p.diff)}</span></h2>
+      <div class="tags">${p.tags.map(t => '#' + t).join(' · ')}</div>
+      <p>${p.desc}</p>
+      <pre>${p.example}</pre>
+      <p style="color:#8b90a8;font-size:12.5px">函数签名：${p.fn}() · 提交后全部用例通过即通关 ✓</p>`;
+    codeEl.value = drafts[p.id] ?? p.starter;
+    resultsEl.innerHTML = '';
+  }
+
+  function judge(isSubmit) {
+    let fn;
+    try { fn = compile(current.fn, codeEl.value) }
+    catch (e) { resultsEl.innerHTML = `<div class="case err">⚠ 编译失败：${String(e && e.message || e)}</div>`; return }
+    if (typeof fn !== 'function') { resultsEl.innerHTML = `<div class="case err">⚠ 未找到函数 ${current.fn}()</div>`; return }
+    saveDraft(current.id, codeEl.value);
+    let pass = 0;
+    const lines = [];
+    current.cases.forEach((c, i) => {
+      const r = runCase(fn, c);
+      if (r.ok) { pass++; lines.push(`<div class="case ok">用例 ${i + 1} ✓ 通过</div>`) }
+      else if (r.error !== null) { lines.push(`<div class="case err">用例 ${i + 1} ✗ 出错：${r.error}</div>`) }
+      else { lines.push(`<div class="case fail">用例 ${i + 1} ✗ 期望 ${json(c.expected)}，实际 ${json(r.actual)}</div>`) }
+    });
+    const allPass = pass === current.cases.length;
+    if (allPass && !solved.has(current.id)) {
+      solved.add(current.id); saveSolved();
+      lines.unshift(`<div class="summary" style="color:#69f0ae">🎉 全部 ${pass}/${current.cases.length} 用例通过，通关！</div>`);
+    } else {
+      lines.unshift(`<div class="summary">${isSubmit ? '提交' : '运行'}结果：${pass}/${current.cases.length} 通过${allPass ? '' : '，继续加油'}</div>`);
+    }
+    resultsEl.innerHTML = lines.join('');
+    renderList();
+  }
+
+  $('run').onclick = () => judge(false);
+  $('submit').onclick = () => judge(true);
+  $('reset').onclick = () => {
+    codeEl.value = current.starter;
+    delete drafts[current.id];
+    try { localStorage.setItem('7d7d-leetcode-drafts', JSON.stringify(drafts)) } catch { }
+    resultsEl.innerHTML = '';
+  };
+  for (const chip of document.querySelectorAll('#chips .chip')) {
+    chip.onclick = () => {
+      filter = chip.dataset.f;
+      for (const c of document.querySelectorAll('#chips .chip')) c.classList.toggle('active', c === chip);
+      renderList();
+    };
+  }
+
+  $('total').textContent = String(PROBLEMS.length);
+  saveSolved();
+  select(PROBLEMS[0].id);
+})();
+</script>
+</body>
+</html>

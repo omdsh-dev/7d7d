@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>五子棋</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e2e; display: flex; align-items: center; justify-content: center; flex-direction: column; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #bar { color: #e8e9f2; font-size: 18px; width: 480px; display: flex; justify-content: space-between; max-width: 92vw; }
+  #bar b { color: #ff7f27; }
+  canvas { background: #d9b877; border-radius: 14px; width: min(92vw, 480px); height: auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); cursor: pointer; }
+  #msg { color: #8b90a8; font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><span>⚫ 五子棋</span><span>你执黑 · AI 执白</span><span id="turn">轮到你了</span></div>
+  <canvas id="cv" width="480" height="480"></canvas>
+  <div id="msg">点击交叉点落子，连成五子获胜</div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const N = 15, SIZE = 480, M = 24, CELL = (SIZE - M * 2) / (N - 1);
+  const EMPTY = 0, BLACK = 1, WHITE = 2;
+  let board = [], turn = BLACK, over = false, thinking = false;
+  let lastMove = null;
+
+  function reset() {
+    board = Array.from({ length: N }, () => Array(N).fill(EMPTY));
+    turn = BLACK; over = false; lastMove = null;
+    document.getElementById('turn').textContent = '轮到你了';
+    document.getElementById('msg').textContent = '点击交叉点落子，连成五子获胜';
+  }
+
+  function pointAt(e) {
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (SIZE / r.width), y = (e.clientY - r.top) * (SIZE / r.height);
+    const c = Math.round((x - M) / CELL), rr = Math.round((y - M) / CELL);
+    if (c < 0 || c >= N || rr < 0 || rr >= N) return null;
+    const dx = x - (M + c * CELL), dy = y - (M + rr * CELL);
+    if (dx * dx + dy * dy > (CELL * 0.45) ** 2) return null;
+    return [rr, c];
+  }
+
+  function checkWin(r, c, who) {
+    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (const [dr, dc] of dirs) {
+      let count = 1;
+      for (const s of [1, -1]) {
+        let nr = r + dr * s, nc = c + dc * s;
+        while (nr >= 0 && nr < N && nc >= 0 && nc < N && board[nr][nc] === who) { count++; nr += dr * s; nc += dc * s; }
+      }
+      if (count >= 5) return true;
+    }
+    return false;
+  }
+
+  // AI：打分制（连子数 + 空位权重），攻守兼顾。
+  function aiMove() {
+    const scores = Array.from({ length: N }, () => Array(N).fill(0));
+    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    const weight = (count, open) => {
+      if (count >= 5) return 100000;
+      if (count === 4 && open === 2) return 10000;
+      if (count === 4) return 5000;
+      if (count === 3 && open === 2) return 1000;
+      if (count === 3) return 400;
+      if (count === 2 && open === 2) return 100;
+      return count * 5;
+    };
+    const scoreAt = (r, c, who) => {
+      let total = 0;
+      for (const [dr, dc] of dirs) {
+        let count = 1, open = 0;
+        for (const s of [1, -1]) {
+          let nr = r + dr * s, nc = c + dc * s, blocked = false;
+          while (nr >= 0 && nr < N && nc >= 0 && nc < N && board[nr][nc] === who) { count++; nr += dr * s; nc += dc * s; }
+          if (nr < 0 || nr >= N || nc < 0 || nc >= N) blocked = true;
+          else if (board[nr][nc] === EMPTY) open++;
+          else blocked = true;
+          if (!blocked) {
+            nr += dr * s; nc += dc * s;
+            if (nr >= 0 && nr < N && nc >= 0 && nc < N && board[nr][nc] === EMPTY) open++;
+          }
+        }
+        total += weight(count, open);
+      }
+      return total;
+    };
+    let best = null, bestScore = -1;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (board[r][c] !== EMPTY) continue;
+      const attack = scoreAt(r, c, WHITE);
+      const defend = scoreAt(r, c, BLACK);
+      const s = Math.max(attack, defend * 1.1);
+      if (s > bestScore) { bestScore = s; best = [r, c]; }
+    }
+    return best;
+  }
+
+  function place(r, c, who) {
+    board[r][c] = who; lastMove = [r, c];
+    if (checkWin(r, c, who)) {
+      over = true;
+      const winner = who === BLACK ? '你赢了！' : 'AI 获胜';
+      document.getElementById('msg').textContent = winner + '，点击棋盘重开';
+      draw(); return true;
+    }
+    if (board.every(row => row.every(v => v !== EMPTY))) {
+      over = true;
+      document.getElementById('msg').textContent = '平局，点击棋盘重开';
+      return true;
+    }
+    return false;
+  }
+
+  cv.addEventListener('click', (e) => {
+    if (over) { reset(); return; }
+    if (turn !== BLACK || thinking) return;
+    const p = pointAt(e);
+    if (p === null || board[p[0]][p[1]] !== EMPTY) return;
+    if (place(p[0], p[1], BLACK)) return;
+    turn = WHITE; thinking = true;
+    document.getElementById('turn').textContent = 'AI 思考中…';
+    setTimeout(() => {
+      const [ar, ac] = aiMove() ?? [7, 7];
+      if (!over && board[ar][ac] === EMPTY) place(ar, ac, WHITE);
+      turn = BLACK; thinking = false;
+      document.getElementById('turn').textContent = '轮到你了';
+      draw();
+    }, 220);
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = 1;
+    for (let i = 0; i < N; i++) {
+      ctx.beginPath(); ctx.moveTo(M, M + i * CELL); ctx.lineTo(SIZE - M, M + i * CELL); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(M + i * CELL, M); ctx.lineTo(M + i * CELL, SIZE - M); ctx.stroke();
+    }
+    ctx.fillStyle = '#8a6a3a';
+    for (const [r, c] of [[3, 3], [3, 11], [7, 7], [11, 3], [11, 11]]) {
+      ctx.beginPath(); ctx.arc(M + c * CELL, M + r * CELL, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (board[r][c] === EMPTY) continue;
+      ctx.fillStyle = board[r][c] === BLACK ? '#1a1a1a' : '#f5f5f5';
+      ctx.beginPath(); ctx.arc(M + c * CELL, M + r * CELL, CELL * 0.42, 0, Math.PI * 2); ctx.fill();
+      if (board[r][c] === WHITE) { ctx.strokeStyle = '#bbb'; ctx.stroke(); }
+    }
+    if (lastMove) {
+      ctx.strokeStyle = '#ff5252'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(M + lastMove[1] * CELL, M + lastMove[0] * CELL, CELL * 0.42 + 3, 0, Math.PI * 2); ctx.stroke();
+    }
+    requestAnimationFrame(draw);
+  }
+
+  reset(); draw();
+})();
+</script>
+</body>
+</html>
