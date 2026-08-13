@@ -1,0 +1,284 @@
+/* 7d7d 门户视图样式：7k7k 式橙色调，填满会话视图区域，与 DSH shell 布局零耦合。 */
+
+.d7d7-view {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #14151f;
+  color: #e8e9f2;
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.d7d7-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #1c1e2e;
+  border-bottom: 1px solid #2a2d42;
+  flex: none;
+}
+
+.d7d7-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.d7d7-logo {
+  font-size: 17px;
+  font-weight: 800;
+  color: #ff7f27;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.d7d7-subtitle {
+  font-size: 12px;
+  color: #8b90a8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.d7d7-categories {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+.d7d7-categories::-webkit-scrollbar {
+  display: none;
+}
+
+.d7d7-chip {
+  flex: none;
+  padding: 5px 13px;
+  border: 1px solid #2a2d42;
+  border-radius: 999px;
+  background: transparent;
+  color: #b9bdd6;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.d7d7-chip:hover {
+  background: #262a40;
+}
+
+.d7d7-chip-active {
+  background: #ff7f27;
+  border-color: #ff7f27;
+  color: #fff;
+  font-weight: 600;
+}
+
+.d7d7-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+
+.d7d7-sync,
+.d7d7-refresh,
+.d7d7-back,
+.d7d7-fullscreen {
+  border: none;
+  border-radius: 8px;
+  background: #2a2d42;
+  color: #b9bdd6;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.d7d7-sync {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.d7d7-sync:hover:not(:disabled),
+.d7d7-refresh:hover,
+.d7d7-back:hover,
+.d7d7-fullscreen:hover {
+  background: #3a3e58;
+  color: #fff;
+}
+
+.d7d7-sync:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.d7d7-refresh,
+.d7d7-fullscreen {
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+}
+
+.d7d7-back {
+  padding: 6px 13px;
+  font-size: 13px;
+}
+
+.d7d7-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 20px;
+}
+
+.d7d7-sync-note {
+  margin-bottom: 10px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #1e2436;
+  border: 1px solid #2a2d42;
+  color: #9fb3d8;
+  font-size: 12.5px;
+}
+
+.d7d7-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.d7d7-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid #2a2d42;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1c1e2e;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.d7d7-card:hover {
+  transform: translateY(-3px);
+  border-color: #ff7f27;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.d7d7-card-cover {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #23263b, #181a29);
+  overflow: hidden;
+}
+
+.d7d7-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.d7d7-card-emoji {
+  font-size: 48px;
+  filter: saturate(0.9);
+}
+
+.d7d7-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(20, 21, 31, 0.85);
+  border: 1px solid #ff7f27;
+  color: #ff7f27;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.d7d7-badge-community {
+  right: auto;
+  left: 8px;
+  border-color: #40c4ff;
+  color: #40c4ff;
+}
+
+.d7d7-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+}
+
+.d7d7-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #e8e9f2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.d7d7-card-category {
+  flex: none;
+  font-size: 11px;
+  color: #8b90a8;
+}
+
+.d7d7-loading,
+.d7d7-error {
+  padding: 50px 20px;
+  text-align: center;
+  color: #8b90a8;
+  font-size: 14px;
+}
+
+.d7d7-error {
+  color: #ff8a80;
+}
+
+.d7d7-error-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #8b90a8;
+}
+
+/* 播放器：绝对定位盖住整个视图，返回后回到网格。 */
+.d7d7-player-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: #14151f;
+}
+
+.d7d7-header-player {
+  gap: 10px;
+}
+
+.d7d7-stage {
+  flex: 1;
+  position: relative;
+  background: #000;
+}
+
+.d7d7-stage iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #000;
+}
