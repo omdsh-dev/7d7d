@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.DS_Store
+vendor/ruffle/*.js
+vendor/ruffle/*.wasm
+.npmrc
+vendor/ruffle/runtime-*/

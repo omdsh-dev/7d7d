@@ -1,0 +1,10 @@
+# 7d7d 是独立插件仓库，不参与 DSH workspace。
+# 开发时使用 package.json 锁定的公共 npm next 包；运行时由宿主提供 peer。
+autoInstallPeers: false
+
+overrides:
+  rolldown: 1.1.1
+  vite: 8.0.16
+
+allowBuilds:
+  lightningcss: true
