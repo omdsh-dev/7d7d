@@ -9,6 +9,9 @@
     "node": ">=22"
   },
   "description": "7d7d —— 7k7k 风格的 DSH 游戏门户：在 Web UI 内生成、同步并游玩 HTML5 与自托管 Ruffle Flash 小游戏。",
+  "keywords": [
+    "dsh-plugin"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/omdsh-dev/7d7d.git"

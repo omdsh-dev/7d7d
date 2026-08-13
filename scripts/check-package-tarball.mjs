@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
+const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+if (!manifest.keywords?.includes('dsh-plugin')) {
+  throw new Error('package discovery keyword dsh-plugin is missing')
+}
 
 const result = spawnSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], {
   encoding: 'utf8',
