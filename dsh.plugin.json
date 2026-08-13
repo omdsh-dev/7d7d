@@ -1,0 +1,22 @@
+{
+  "id": "@mattheliu/7d7d",
+  "version": "0.4.0-rc.1",
+  "main": "./lib/index.js",
+  "description": "7d7d —— 7k7k 风格 DSH 游戏门户：直接游玩本地与社区 HTML5 游戏，可选安装自托管 Ruffle 支持 Flash",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": [
+      "skills/7d7d"
+    ]
+  },
+  "client": {
+    "main": "./lib/client.js",
+    "inject": [
+      "@deepseek-ai/dsh-client-runtime",
+      "@deepseek-ai/dsh-client-ui-conversation"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+# 7d7d 以 profile 层方式安装：在任意 DSH Web profile 之上叠加本插件。
+# 游戏库由主服务器同源路由托管，门户 UI 由同一插件提供。
+- insert:
+    - id: 7d7d
+      name: '@mattheliu/7d7d'

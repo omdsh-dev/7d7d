@@ -1,0 +1,76 @@
+{
+  "games": [
+    {
+      "slug": "leetcode",
+      "title": "LeetCode 刷题器",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "maze",
+      "title": "迷宫",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "memory-match",
+      "title": "记忆翻牌",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "minesweeper",
+      "title": "扫雷",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "plane-shooter",
+      "title": "飞机大战",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "pong",
+      "title": "双人乒乓",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "sokoban",
+      "title": "推箱子",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "space-shooter",
+      "title": "太空射击",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    },
+    {
+      "slug": "star-quest",
+      "title": "星际探险",
+      "files": [
+        "game.json",
+        "index.html"
+      ]
+    }
+  ]
+}
