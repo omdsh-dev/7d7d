@@ -7,15 +7,16 @@ credentials, local SDK paths, or copied DSH source.
 Before opening a pull request, run:
 
 ```sh
-NPM_TOKEN=<short-lived-read-token> pnpm install --frozen-lockfile --ignore-scripts
+NPM_CONFIG_USERCONFIG=/dev/null pnpm install --frozen-lockfile --ignore-scripts
+pnpm workshop:check
 pnpm typecheck
 pnpm test
 pnpm build
 pnpm pack:check
 ```
 
-Keep the concrete read token in the process environment and reference it through
-local npm configuration. Never write it into the repository, logs or fixtures.
+The declared DSH dependencies are publicly readable. CI and local verification must not depend on
+GitHub or npm credentials, and credentials must never be written into the repository, logs or fixtures.
 
 Commit source and regenerated `lib/` artifacts together. Community games belong under
 `community-games/<slug>/`; run `node scripts/update-catalog.mjs` after changing that directory.

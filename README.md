@@ -24,8 +24,8 @@
 git clone https://github.com/omdsh-dev/7d7d.git
 cd 7d7d
 
-# 2. 使用临时只读 registry 令牌安装锁定依赖
-NPM_TOKEN=<short-lived-read-token> pnpm install --frozen-lockfile --ignore-scripts
+# 2. 从公共 npm registry 安装锁定依赖；不读取本机 npm 凭据
+NPM_CONFIG_USERCONFIG=/dev/null pnpm install --frozen-lockfile --ignore-scripts
 
 # 3. 构建（产出 lib/index.js + lib/client.js）
 pnpm build
@@ -34,14 +34,16 @@ pnpm build
 pnpm fetch:ruffle
 ```
 
-仓库不复制 DSH 实现源码，也不依赖固定的本机目录。安装时按包提供方说明，在本机
-npm 配置中引用 `${NPM_TOKEN}`，真实令牌只放进进程环境，绝不写入仓库。类型检查
-直接使用 npm 的 `next` 包校验真实接口；运行时实现由宿主注入。本项目保留
+仓库不复制 DSH 实现源码，也不依赖固定的本机目录。开发依赖从公共 npm registry
+匿名读取，CI 不需要 GitHub 或 npm 认证。类型检查直接使用精确 RC.6 包校验真实接口；运行时实现由宿主注入。本项目保留
 `private: true`，发布物通过 Git source 安装，不承诺将本插件发布为公共 npm 包。
 
 ### 装进 DSH
 
-把 `cordis.patch.yml` 的内容并入你的 profile 层，或使用 `dsh.plugin.json` 清单安装：
+7d7d 是 Web UI 扩展，必须装在包含精确
+`@deepseek-ai/dsh-web-app@0.1.0-rc.6` 的 Web Profile 上；裸 Profile 不提供它依赖的
+`webServer` 和客户端插槽服务。把 `cordis.patch.yml` 的内容并入该 Web Profile 层，或使用
+`dsh.plugin.json` 清单安装：
 
 ```yaml
 - insert:
@@ -185,6 +187,7 @@ vendor/ruffle/        自托管 Ruffle 说明与本地版本化运行目录
 pnpm typecheck   # tsc 全量类型检查
 pnpm test        # vitest（manifest / 静态服务 / 社区同步 / 服务器集成）
 pnpm build       # tsdown 双端打包
+pnpm workshop:check # 校验公开 Workshop 声明、RC.6 依赖和证据路径
 ```
 
 ## Roadmap

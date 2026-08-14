@@ -8,6 +8,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,6 +52,15 @@ export const MOUNT_BASE = '/7d7d'
 
 /** 服务信息路由（诊断用；客户端直接使用同源相对路径，不做端口发现）。 */
 export const SERVER_INFO_PATH = `${MOUNT_BASE}/api/server.json`
+
+/** Workshop Harness observes this only when it provides an isolated probe directory. */
+export const HARNESS_CAPABILITY = '7d7d-routes-registered'
+
+function writeHarnessProbe(file: 'ready.json' | 'disposed.json', payload: Record<string, unknown>): void {
+  const root = process.env.OMDSH_HARNESS_PROBE_DIR
+  if (root === undefined || root === '') return
+  writeFileSync(join(root, file), `${JSON.stringify(payload)}\n`, 'utf8')
+}
 
 /**
  * 插件主体。
@@ -106,10 +116,21 @@ export function apply(ctx: Context, config: Config): void {
     const disposeInfo = ctx.webServer.register(serverInfoRoute)
     // 启动同步（尽力而为，失败不致命；手动触发走 POST <base>/api/sync）。
     void router.sync()
+    writeHarnessProbe('ready.json', {
+      capability: HARNESS_CAPABILITY,
+      version: '0.4.0-rc.2',
+      routes: [MOUNT_BASE, SERVER_INFO_PATH],
+      pid: process.pid,
+    })
     ctx.logger.info?.(`[7d7d] games portal mounted at ${MOUNT_BASE} (library: ${root})`)
     return () => {
       dispose()
       disposeInfo()
+      writeHarnessProbe('disposed.json', {
+        capability: HARNESS_CAPABILITY,
+        version: '0.4.0-rc.2',
+        pid: process.pid,
+      })
     }
   }, '7d7d: games routes')
 }

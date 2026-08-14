@@ -27,13 +27,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://registry.npmjs.org
-          scope: '@deepseek-ai'
       - name: Install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          test -n "$NODE_AUTH_TOKEN"
-          pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Verify
-        run: pnpm typecheck && pnpm test && pnpm build && pnpm pack:check
+        run: pnpm workshop:check && pnpm typecheck && pnpm test && pnpm build && pnpm pack:check
